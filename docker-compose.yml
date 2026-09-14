@@ -1,0 +1,77 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: acrylic_erp
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-erp_pass_2025}
+    # 資安：不對外曝露5432 port。backend/celery透過Docker內部網路以服務名稱"db"連線即可，
+    # 不需要讓主機（更遑論外部網路）能直接連到資料庫，避免繞過應用層直接暴力破解DB密碼。
+    # 本機除錯需要用DB工具連線時，可暫時取消下方註解（正式環境請勿開啟）：
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_user -d acrylic_erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    # 資安：不對外曝露6379 port。Redis預設無身份驗證機制，直接對外曝露是已知的
+    # 高風險錯誤設定（常被用於掃描攻擊/勒索軟體/挖礦攻擊的入侵管道），僅供內部網路存取。
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://erp_user:${DB_PASSWORD:-erp_pass_2025}@db:5432/acrylic_erp
+      REDIS_URL: redis://redis:6379/0
+      # 資安：SECRET_KEY從根目錄.env讀取，不寫死在此檔案中。
+      # 部署前請在專案根目錄建立.env，內容包含：SECRET_KEY=<用secrets.token_urlsafe(32)產生的隨機值>
+      SECRET_KEY: "${SECRET_KEY:?請在根目錄.env設定SECRET_KEY（見.env.example說明）}"
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      TENANT_ID: default
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    volumes:
+      - ./backend:/app
+      - media_files:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://erp_user:${DB_PASSWORD:-erp_pass_2025}@db:5432/acrylic_erp
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: "${SECRET_KEY:?請在根目錄.env設定SECRET_KEY}"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+      - db
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  media_files:

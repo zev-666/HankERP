@@ -1,0 +1,4 @@
+# 開發與測試專用依賴（不隨生產image打包，避免膨脹映像檔體積）
+-r requirements.txt
+pytest==8.0.2
+pytest-asyncio==0.23.5

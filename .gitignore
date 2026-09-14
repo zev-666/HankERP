@@ -1,0 +1,48 @@
+# ══ 機敏資訊（絕對不可推上GitHub）══
+.env
+.env.local
+.env.production
+backend/.env
+frontend/.env.local
+frontend/.env.production
+*.pem
+*.key
+
+# ══ Python ══
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+venv/
+.venv/
+env/
+*.sqlite3
+
+# ══ Node / Next.js ══
+node_modules/
+.next/
+out/
+build/
+.turbo/
+next-env.d.ts.bak
+
+# ══ 編輯器 / 作業系統 ══
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ══ 日誌與暫存 ══
+*.log
+.cache/
+tmp/
+coverage/
+.coverage
+htmlcov/
+
+# ══ 建置與交付產物 ══
+dist/
+*.zip
+!infra/*.zip

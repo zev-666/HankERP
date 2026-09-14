@@ -1,0 +1,128 @@
+name: CI
+
+# 這條 pipeline 刻意不只跑單元測試。
+# 本專案歷史上最常見的問題不是「測試沒過」，而是「測試過了，但功能其實沒接起來」，
+# 因此 CI 會真的起一個 PostgreSQL、跑 migration、seed、啟動 uvicorn，
+# 再用真實 HTTP request 把「官網詢價 → 後台」「工單發料 → 扣庫存 → 完工入庫」走一遍。
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    name: 後端（migration + pytest + 端到端）
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: erp_user
+          POSTGRES_PASSWORD: erp_pass_ci
+          POSTGRES_DB: acrylic_erp
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://erp_user:erp_pass_ci@localhost:5432/acrylic_erp
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-only-secret-key-at-least-32-characters-long
+      ENVIRONMENT: development
+      CORS_ORIGINS: http://localhost:3000
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 安裝依賴
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: 資料庫 migration
+        run: alembic upgrade head
+
+      - name: 種子資料（含9種角色）
+        run: python scripts/seed_data.py
+
+      - name: 單元測試
+        run: pytest -q
+
+      - name: 啟動 API 並等待就緒
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/health && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8000/health
+
+      - name: 端到端驗證（詢價 / 發料 / 完工入庫）
+        run: API_BASE=http://127.0.0.1:8000 python scripts/verify_e2e.py
+
+      - name: 記錄實際端點數（避免文件數字再次過期）
+        run: |
+          python - <<'PY'
+          import json, urllib.request, collections
+          spec = json.load(urllib.request.urlopen("http://127.0.0.1:8000/openapi.json"))
+          tags = collections.Counter(
+              op.get("tags", ["(health)"])[0]
+              for p, ms in spec["paths"].items() for op in ms.values()
+          )
+          total = sum(tags.values())
+          print(f"HTTP 端點總數: {total}")
+          print(f"業務端點（不含 /health）: {total - tags['(health)']}")
+          print(f"模組數: {len([t for t in tags if t != '(health)'])}")
+          for t, c in tags.most_common():
+              print(f"  {c:3d}  {t}")
+          PY
+
+  frontend:
+    name: 前端（build + lint + audit）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint（零 warning）
+        run: npx eslint . --max-warnings=0
+
+      - name: Build
+        # 後端不在 CI 前端 job 裡，publicApi.ts 的 fetch 會失敗並降級為空清單，
+        # 這正是我們要驗證的行為：後端沒開時前端仍必須 build 成功。
+        run: npm run build
+
+      - name: 安全性稽核
+        run: npm audit --audit-level=high
