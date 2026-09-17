@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+﻿const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 class ApiClient {
   getToken(): string | null {
@@ -53,7 +53,7 @@ class ApiClient {
 
   // Auth
   login(email: string, password: string) {
-    return this.post<{ access_token: string; user: { id: string; full_name: string; role: { name: string } } }>("/api/v1/auth/login", { email, password });
+    return this.post<{ access_token: string; token_type: string; user_id: string; user_name: string; role: string }>("/api/v1/auth/login", { email, password });
   }
   // Dashboard
   getDashboard() { return this.get<any>("/api/v1/analytics/dashboard"); }
@@ -142,3 +142,4 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+

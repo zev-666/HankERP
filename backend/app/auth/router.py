@@ -1,5 +1,4 @@
-
-import secrets
+﻿import secrets
 from datetime import timedelta, datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -32,6 +31,7 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user_id: str
     user_name: str
     role: str
 
@@ -74,10 +74,10 @@ async def login(request: Request, request_body: LoginRequest, db: AsyncSession =
     user = result.scalar_one_or_none()
     if not user or not verify_password(request_body.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="帳號或密碼錯誤")
-    
+
     token = create_access_token(data={"sub": str(user.id)})
     role_name = user.role.name if user.role else "viewer"
-    return TokenResponse(access_token=token, user_name=user.full_name or user.email, role=role_name)
+    return TokenResponse(access_token=token, user_id=str(user.id), user_name=user.full_name or user.email, role=role_name)
 
 @router.post("/register", summary="註冊新使用者（需現有租戶與角色已存在）")
 @limiter.limit("10/hour")

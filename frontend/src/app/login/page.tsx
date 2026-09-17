@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
@@ -19,13 +19,13 @@ export default function LoginPage() {
     try {
       const res = await api.login(email, password);
       setAuth(res.access_token, {
-        id: res.user.id,
-        full_name: res.user.full_name,
-        role: res.user.role.name,
+        id: res.user_id,
+        full_name: res.user_name,
+        role: res.role,
       });
       router.push("/erp/dashboard");
     } catch (err: any) {
-      setError(err.message || "登入失敗，請確認帳號密碼");
+      setError(err.message || "登入失敗,請確認帳號密碼");
     } finally {
       setLoading(false);
     }
@@ -43,7 +43,7 @@ export default function LoginPage() {
             <div className="bg-red-50 border border-red-200 text-red-600 rounded-lg p-3 text-sm">{error}</div>
           )}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">帳號（Email）</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">帳號(Email)</label>
             <input
               type="email" value={email} onChange={e => setEmail(e.target.value)}
               required placeholder="your@email.com"
