@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { SiteHeader, SiteFooter } from "@/components/site/SiteHeader";
+import { TypeDrawing, kindFromText } from "@/components/site/TypeDrawing";
 import { getPublicCase } from "@/lib/publicApi";
 
 export const revalidate = 60;
@@ -21,92 +22,98 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-function Section({ title, body }: { title: string; body: string | null }) {
-  if (!body) return null;
-  return (
-    <div>
-      <h2 className="text-sm font-semibold text-slate-800 tracking-wide">{title}</h2>
-      <p className="text-slate-600 mt-2 leading-relaxed whitespace-pre-line">{body}</p>
-    </div>
-  );
-}
-
 export default async function PortfolioDetailPage({ params }: Props) {
   const { slug } = await params;
   const c = await getPublicCase(slug);
   if (!c) notFound();
 
-  const specs = [
-    ["客戶", c.client_name],
-    ["產業", c.industry],
-    ["產品類型", c.product_type],
-    ["尺寸", c.dimensions],
-    ["材質", c.materials],
-  ].filter(([, v]) => Boolean(v)) as [string, string][];
+  const specs = (
+    [
+      ["客戶", c.client_name],
+      ["產業", c.industry],
+      ["產品類型", c.product_type],
+      ["尺寸", c.dimensions],
+      ["材質", c.materials],
+    ] as [string, string | null][]
+  ).filter(([, v]) => Boolean(v)) as [string, string][];
+
+  const sections = (
+    [
+      ["客戶挑戰", c.challenge],
+      ["我們的作法", c.solution],
+      ["成果", c.result],
+    ] as [string, string | null][]
+  ).filter(([, v]) => Boolean(v)) as [string, string][];
 
   return (
-    <div className="bg-white min-h-screen">
+    <>
       <SiteHeader />
-
-      <article className="max-w-4xl mx-auto px-6 py-14">
-        <Link href="/portfolio" className="text-sm text-slate-500 hover:text-slate-800">
+      <article className="site-wrap site-sec" style={{ maxWidth: 960 }}>
+        <Link href="/portfolio" className="back">
           ← 回作品案例
         </Link>
+        <div className="sec-head" style={{ marginTop: 22 }}>
+          {c.industry && <div className="eyebrow">{c.industry}</div>}
+          <h1 className="site-h2">{c.title}</h1>
+        </div>
 
-        <h1 className="text-3xl font-bold text-slate-900 mt-4">{c.title}</h1>
-
-        {c.cover_image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={c.cover_image_url}
-            alt={c.title}
-            className="w-full rounded-2xl mt-8 border border-slate-100"
-          />
-        )}
+        <div className="panel" style={{ padding: 16 }}>
+          <div className="draw" style={{ aspectRatio: "16/9" }}>
+            {c.cover_image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={c.cover_image_url} alt={c.title} />
+            ) : (
+              <div style={{ width: "min(420px,100%)" }}>
+                <TypeDrawing kind={kindFromText(`${c.industry ?? ""}${c.title}`)} />
+              </div>
+            )}
+          </div>
+        </div>
 
         {specs.length > 0 && (
-          <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 mt-8 border-y border-slate-100 py-6">
+          <dl className="kv" style={{ marginTop: 24 }}>
             {specs.map(([k, v]) => (
               <div key={k}>
-                <dt className="text-xs text-slate-400">{k}</dt>
-                <dd className="text-sm text-slate-700 mt-1">{v}</dd>
+                <dt>{k}</dt>
+                <dd>{v}</dd>
               </div>
             ))}
           </dl>
         )}
 
-        <div className="space-y-8 mt-8">
-          <Section title="客戶挑戰" body={c.challenge} />
-          <Section title="我們的作法" body={c.solution} />
-          <Section title="成果" body={c.result} />
-        </div>
-
-        {c.gallery_urls?.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-10">
-            {c.gallery_urls.map((url, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={i}
-                src={url}
-                alt={`${c.title} 細節 ${i + 1}`}
-                className="rounded-xl border border-slate-100"
-              />
+        {sections.length > 0 && (
+          <div style={{ display: "grid", gap: 30, marginTop: 44 }}>
+            {sections.map(([h, body]) => (
+              <div key={h} className="prose">
+                <div className="eyebrow" style={{ marginBottom: 10 }}>
+                  {h}
+                </div>
+                <p style={{ whiteSpace: "pre-line" }}>{body}</p>
+              </div>
             ))}
           </div>
         )}
 
-        <div className="mt-12 bg-slate-50 rounded-2xl p-8 text-center">
-          <p className="text-slate-700 font-medium">有類似的展示架需求？</p>
-          <Link
-            href="/quote"
-            className="inline-block mt-4 bg-slate-900 text-white px-6 py-3 rounded-full text-sm"
-          >
-            線上詢價
+        {c.gallery_urls?.length > 0 && (
+          <div className="cases-3" style={{ marginTop: 40 }}>
+            {c.gallery_urls.map((url, i) => (
+              <div key={i} className="draw">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`${c.title} 細節 ${i + 1}`} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="panel cta" style={{ marginTop: 56 }}>
+          <h2>有類似的展示架需求？</h2>
+          <p>給我們尺寸、材質與數量，一個工作日內回覆初步報價評估。</p>
+          <Link className="btn btn-led" href="/quote">
+            線上詢價 →
           </Link>
         </div>
       </article>
-
       <SiteFooter />
-    </div>
+    </>
   );
 }
