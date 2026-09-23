@@ -1,6 +1,6 @@
 # MVP 開發查核清單（前6個月）
 
-> **狀態標記說明**（2026-09-14 更新至 v2.0，對應 GitHub 儲存庫 `zev-666/HankERP`）：
+> **狀態標記說明**（2026-09-23 更新至 v2.1，對應 GitHub 儲存庫 `zev-666/HankERP`）：
 > - ✅ = 本對話框以真實PostgreSQL+JWT+HTTP request端到端測試驗證通過
 > - ⚠️ = 程式碼/頁面已存在且可運作，但該項目描述的具體細節未逐一驗證
 > - ❌ = 尚未實作，或無證據顯示已完成
@@ -11,7 +11,11 @@
 > 13 個業務模組 · 68 個業務 API 端點（＋`/health` 共 69）· 30 張業務資料表 ·
 > 23 條前端路由（21 靜態 ＋ 2 動態）· 17 項 pytest · `npm audit` 0 漏洞 · `eslint --max-warnings=0` 全綠。
 >
-> **本清單共 60 項：✅ 41 項（68%）、⚠️ 8 項、❌ 11 項。**
+> **v2.1 變更**：pytest 17 → **21 項**（沙盒以 shim 實際執行全過；正式數字以 CI 為準）。
+> 端點數、資料表數、前端路由數 **v2.1 未變動**（只改既有端點的回傳欄位、新增 1 個純資料 migration）。
+>
+> **本清單共 61 項：✅ 39 項（64%）、⚠️ 11 項、❌ 11 項。**
+> （v2.1：「利用率計算」「板材利用率月報」由 ✅ 降為 ⚠️——舊的 ✅ 是錯的，利用率算法本身有誤；新增「資料庫自動備份」⚠️。）
 >
 > （此三個數字由腳本逐行統計勾選項得出，非目測估算。）
 
@@ -104,7 +108,7 @@
   實測：工序未完成時正確擋下；兩道工序各報 9 良 1 壞後入庫 9 台（非 18 台）；
   已完工的工單重複呼叫正確擋下
 
-## Phase 7: 裁切優化 ✅（本對話框驗證最完整的模組）
+## Phase 7: 裁切優化 ⚠️（v2.1：利用率已修正；排版品質仍明顯低於開條計算器，引擎待重做）
 - [x] ✅ BFD排版引擎（Python核心） — 17項pytest測試全數通過，含旋轉不變性、無重疊、邊界值、compare-presets板型比較等驗證
 - [ ] ❌ 排版視覺化工作台（Konva.js） — 目前為CSS版本，非Konva.js（README已註明為已知待優化項）
 - [ ] ❌ 多工單混排支援 — v1.3更正：`batch_optimize_multiple_orders`實際上是回傳
@@ -116,7 +120,13 @@
   一致的`--concurrency=4`（prefork多進程池）指令**驗證單一任務與4任務並行皆正確完成；
   另修正worker啟動時的`CPendingDeprecationWarning`。惟`calculate_nesting_async`本身
   目前仍是死程式碼，router的`/calculate`端點是同步呼叫，未串接此非同步任務
-- [x] ✅ 利用率計算+月報 — 利用率計算已驗證；`analytics/material-utilization`月報端點存在
+- [x] ⚠️ 利用率計算+月報 — **v2.1 更正**：舊版 ✅ 是錯的。舊算法分子用「需求零件總面積」，
+  零件排不下時回報 100%（實測：2000×1000 零件放 2000×1000 板、刀縫 3 → 0 件排入、利用率 1.0）。
+  v2.1 改為「實際放置面積 ÷ 用板面積」、回傳 `unplaced`／`placed_count`／`requested_count`，
+  有零件排不下時 job 狀態為 `partial`（不列入 KPI），前端顯示紅色警示；
+  migration `c3e8f1a2b4d5` 重算歷史 `nesting_jobs`（舊值備份於 `result_json.legacy_v20`，可 downgrade 還原）。
+  驗證：引擎 21 項 pytest 全過，且新增的 5 項在舊引擎上確實失敗；migration 的重算函式與新引擎 4 組輸入結果一致。
+  **未驗證**：真實 PostgreSQL 上的 migration 與 HTTP 回應——已寫入 CI（`verify_migration_v21.py`），待 GitHub Actions 綠燈才能改 ✅
 - [ ] ⚠️ 剩料自動入庫 — `remnant_inventory`表隨nesting job自動產生剩料紀錄，未驗證與sheet_stocks的入庫串接
 - [ ] ❌ 切割指示圖匯出（PNG/PDF） — 未見實作
 - [x] ✅ **（新增）9種板型自動比較** — `POST /nesting/compare-presets`已測試，正確推薦最省片數板型
@@ -124,7 +134,12 @@
 ## Phase 8: 儀表板+上線 ⚠️（後端指標已驗證，部署相關全未執行）
 - [x] ⚠️ 廠長儀表板（Recharts圖表） — `/api/v1/analytics/dashboard`後端已測試並回傳正確KPI數值；前端Recharts圖表渲染僅確認編譯通過，未驗證視覺呈現
 - [x] ✅ 訂單達交率追蹤 — dashboard端點回傳`on_time_delivery_rate_pct`欄位，邏輯已驗證
-- [x] ✅ 板材利用率月報 — dashboard端點回傳`avg_material_utilization_pct`欄位（測試中正確反映裁切模組產生的37.5%利用率），驗證跨模組資料串接正確
+- [x] ⚠️ 板材利用率月報 — dashboard端點回傳`avg_material_utilization_pct`欄位，跨模組串接正確；
+  **但 v2.1 之前的數值被錯誤的利用率算法高估**（見 Phase 7）。v2.1 修正後待 CI 與正式資料確認
+- [ ] ⚠️ 資料庫自動備份 — **v2.1 新增** `db-backup` 容器（`infra/backup/backup.sh`）：每天 `pg_dump`、
+  做完用 `pg_restore --list` 驗證、保留 14 天；`restore.sh` 還原需 `--yes`。
+  CI 新增「備份 → 還原到新庫 → 每張表列數比對」往返測試。**未驗證**：CI 尚未跑、正式主機尚未啟用；
+  備份與資料庫在同一台主機，**異地備份尚未設定**（見 `DEPLOYMENT.md`「資料庫備份」）
 - [ ] ❌ AWS Taiwan部署 — 未執行
 - [ ] ❌ 域名 + SSL設定 — 未執行
 - [ ] ❌ 使用者培訓文件 — 未撰寫（`README.md`/`CONTRIBUTING.md` 是給開發者的，非給現場人員）

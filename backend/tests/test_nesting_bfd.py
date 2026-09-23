@@ -48,7 +48,10 @@ def test_impossible_part_not_placed():
     engine = BFDNestingEngine(sheet_length=2000, sheet_width=1000, kerf=3)
     r = engine.nest([_mk_parts("p1", "超大件", 3000, 100, quantity=1)])
     assert len(r["placements"]) == 0
-    assert r["sheets_used"] == 1  # 仍會開一張空板（無零件放入）
+    # v2.1：一件都沒排進去時不算用板（舊版會回報 1 張空板）
+    assert r["sheets_used"] == 0
+    assert r["utilization_rate"] == 0
+    assert len(r["unplaced"]) == 1
 
 
 def test_rotation_invariance():
@@ -162,3 +165,60 @@ def test_edge_dimensions_do_not_crash(length, width, qty):
     engine = BFDNestingEngine(sheet_length=2000, sheet_width=1000, kerf=3)
     r = engine.nest([_mk_parts("p1", "邊界件", length, width, quantity=qty)])
     assert r is not None
+
+
+# ── v2.1 利用率修正（回歸測試）─────────────────────────────────────────
+# 舊版利用率分子用「需求零件總面積」，排不下時回報 100% 並污染廠長儀表板 KPI。
+
+def test_utilization_full_sheet_part_unplaced_is_zero():
+    """整板尺寸零件遇到刀縫排不下 → 利用率 0，不可回報 100%"""
+    engine = BFDNestingEngine(sheet_length=2000, sheet_width=1000, kerf=3)
+    r = engine.nest([_mk_parts("p1", "整板件", 2000, 1000, quantity=1)])
+    assert r["placed_count"] == 0
+    assert r["requested_count"] == 1
+    assert r["utilization_rate"] == 0
+    assert r["sheets_used"] == 0
+    assert r["waste_area_mm2"] == 0
+    assert r["unplaced"][0]["label"] == "整板件"
+
+
+def test_utilization_counts_only_placed_area():
+    """部分排不下時，利用率只算實際放上板的面積"""
+    engine = BFDNestingEngine(sheet_length=2000, sheet_width=1000, kerf=3)
+    r = engine.nest([
+        _mk_parts("big", "超大件", 3000, 100, quantity=1),
+        _mk_parts("ok", "正常件", 500, 300, quantity=4),
+    ])
+    assert r["placed_count"] == 4
+    assert r["requested_count"] == 5
+    assert [u["part_id"] for u in r["unplaced"]] == ["big"]
+    assert r["sheets_used"] == 1
+    assert r["utilization_rate"] == round(4 * 500 * 300 / (2000 * 1000), 4)  # 0.3，舊版會算成 0.45
+    assert r["placed_area_mm2"] == 4 * 500 * 300
+    assert r["waste_area_mm2"] == 2000 * 1000 - 4 * 500 * 300
+
+
+def test_utilization_matches_placements_general():
+    """一般情況：利用率 = Σ(放置面積) ÷ (板數 × 板面積)，且不超過 1"""
+    engine = BFDNestingEngine(sheet_length=1915, sheet_width=1315, kerf=3)
+    r = engine.nest([
+        _mk_parts("a", "側板", 630, 400, quantity=4),
+        _mk_parts("b", "層板", 630, 200, quantity=6),
+    ])
+    area = sum(p["placed_length"] * p["placed_width"] for p in r["placements"])
+    expected = round(area / (r["sheets_used"] * 1915 * 1315), 4)
+    assert r["utilization_rate"] == expected
+    assert 0 < r["utilization_rate"] <= 1
+    assert r["unplaced"] == []
+
+
+def test_compare_presets_excludes_preset_with_unplaced():
+    """剛好等於 S 板尺寸的零件（扣刀縫排不下）→ S 板不能被推薦"""
+    parts = [_mk_parts("p1", "整板件", 1915, 1315, quantity=1)]
+    result = compare_all_presets(parts, kerf=3.0)
+    s_item = next(i for i in result["items"] if i["name"] == "S")
+    assert s_item["impossible"] is True
+    assert s_item["unplaced_count"] == 1
+    assert result["best_preset"] != "S"
+    best = next(i for i in result["items"] if i["name"] == result["best_preset"])
+    assert best["unplaced_count"] == 0

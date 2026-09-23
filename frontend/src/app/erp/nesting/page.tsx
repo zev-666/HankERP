@@ -147,6 +147,14 @@ export default function NestingPage() {
                 </div>
               </div>
 
+              {result.unplaced?.length > 0 && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  ⚠ 已排入 {result.placed_count} / {result.requested_count} 件，有 {result.unplaced.length} 件沒有排進去：
+                  {result.unplaced.map((u: any) => `${u.label} ${u.length}×${u.width}`).join("、")}
+                  。請檢查尺寸（整板尺寸的零件需扣刀縫）或改用較大板型。
+                </div>
+              )}
+
               {/* Visual nesting canvas per sheet */}
               {Array.from({ length: result.sheets_used }).map((_, si) => {
                 const sheetPlacements = result.placements?.filter((p: any) => p.sheet_index === si) || [];

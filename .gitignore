@@ -46,3 +46,7 @@ htmlcov/
 dist/
 *.zip
 !infra/*.zip
+
+# ══ 資料庫備份檔（含全部業務資料，絕對不可推上GitHub）══
+backups/
+*.dump

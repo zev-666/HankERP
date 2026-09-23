@@ -51,6 +51,7 @@ class BFDNestingEngine:
 
         sheets: List[Sheet] = [Sheet(self.sheet_length, self.sheet_width)]
         placements = []
+        unplaced = []
 
         for part in expanded:
             placed = False
@@ -81,16 +82,33 @@ class BFDNestingEngine:
                         "placed_length": pl, "placed_width": pw, "rotated": rotated
                     })
                     sheets.append(new_sheet)
+                else:
+                    # 開新板也放不下 → 尺寸超出可用範圍。以前這裡靜默丟棄，現在回報給呼叫端。
+                    unplaced.append({
+                        "part_id": part.id, "label": part.label,
+                        "length": part.length, "width": part.width,
+                        "reason": "尺寸超出原板可用範圍（含刀縫）",
+                    })
 
-        total_part_area = sum(p.length * p.width for p in expanded)
+        # 只有第 0 張板可能是空的（新板只在放置成功後才加入）。一件都沒排進去時不算用板。
+        if not placements:
+            sheets = []
+
+        # 利用率 = 實際放上板的面積 ÷ 用掉的板面積（v2.1 修正）。
+        # 舊版分子用「需求零件總面積」，排不下時會回報 100%，並污染廠長儀表板 KPI。
+        placed_area = sum(p["placed_length"] * p["placed_width"] for p in placements)
         total_sheet_area = len(sheets) * self.sheet_length * self.sheet_width
-        utilization = total_part_area / total_sheet_area if total_sheet_area > 0 else 0
+        utilization = placed_area / total_sheet_area if total_sheet_area > 0 else 0.0
 
         return {
             "sheets_used": len(sheets),
             "utilization_rate": round(utilization, 4),
             "placements": placements,
-            "waste_area_mm2": round(total_sheet_area - total_part_area, 2),
+            "placed_count": len(placements),
+            "requested_count": len(expanded),
+            "unplaced": unplaced,
+            "placed_area_mm2": round(placed_area, 2),
+            "waste_area_mm2": round(total_sheet_area - placed_area, 2),
             "remnants": self._extract_remnants(sheets),
         }
 
@@ -172,16 +190,20 @@ def compare_all_presets(parts: List[Part], kerf: float = 3.0) -> dict:
         if impossible:
             results.append({
                 "name": preset["name"], "sheet_length": sl, "sheet_width": sw,
-                "sheets_used": None, "utilization_rate": 0.0, "impossible": True,
+                "sheets_used": None, "utilization_rate": 0.0, "unplaced_count": None,
+                "impossible": True,
             })
             continue
 
         engine = BFDNestingEngine(sheet_length=sl, sheet_width=sw, kerf=kerf)
         r = engine.nest(parts)
+        # 有零件排不進去的板型不能當推薦方案（例如整板尺寸的零件遇到刀縫）
+        unplaced_count = len(r["unplaced"])
         results.append({
             "name": preset["name"], "sheet_length": sl, "sheet_width": sw,
             "sheets_used": r["sheets_used"], "utilization_rate": r["utilization_rate"],
-            "impossible": False,
+            "unplaced_count": unplaced_count,
+            "impossible": unplaced_count > 0,
         })
 
     valid = [r for r in results if not r["impossible"]]

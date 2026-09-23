@@ -223,9 +223,46 @@ curl.exe http://43.156.110.76:8000/health
 - [ ] **backend 仍在跑 `--reload`**（開發模式旗標），且掛著 `./backend:/app` bind mount。
       功能正常，但不是正式環境該有的設定，之後應比照前端處理
 - [ ] **8000 port 直接對外曝露** —— 之後應該用反向代理（Caddy / nginx）只開 443
-- [ ] **資料庫沒有備份機制**
+- [x] ~~資料庫沒有備份機制~~ → v2.1 新增 `db-backup` 容器（見下方「資料庫備份」）。**異地備份仍未設定**
 - [ ] 資料庫裡有 `verify_e2e.py` 產生的測試資料（王大明詢價、客戶 C0001、工單 WO2026-0001）。
       正式交付給工廠前要清掉
+
+## 資料庫備份（v2.1）
+
+`docker-compose.yml` 的 `db-backup` 容器每天做一次 `pg_dump`，寫到主機的 `./backups/`，
+保留 14 天（`.env` 可用 `BACKUP_INTERVAL_SECONDS`、`BACKUP_KEEP_DAYS` 調整）。
+每份備份做完會立刻用 `pg_restore --list` 讀一次，讀不出來就刪掉並在 log 報錯。
+
+```bash
+# 啟用（第一次）
+cd /home/ubuntu/HankERP && git pull && docker compose up -d db-backup
+
+# 確認有在跑、看最近一次結果
+docker compose logs --tail 20 db-backup
+ls -lh backups/
+
+# 立刻手動備份一次（例如改版前）
+docker compose run --rm -e BACKUP_ONCE=1 db-backup
+
+# 還原演練：先還原到「新的」資料庫檢查，不要直接覆蓋正式庫
+docker compose run --rm db-backup sh /scripts/restore.sh /backups/<檔名>.dump acrylic_restore_check --yes
+docker compose exec db psql -U erp_user -d acrylic_restore_check -c "SELECT count(*) FROM customers;"
+```
+
+**真的要把正式庫還原成某份備份時**：先 `docker compose stop backend celery`（避免還原中有人寫入），
+還原到 `acrylic_erp`，再 `docker compose start backend celery`。
+
+⚠️ **備份和資料庫在同一台主機**：能防「誤刪、程式把資料寫壞」，防不了主機損毀或帳號被停用。
+至少每週把 `backups/` 最新一份下載到公司電腦（Windows PowerShell）：
+
+```powershell
+$f = ssh ubuntu@43.156.110.76 "ls -t /home/ubuntu/HankERP/backups | head -1"
+scp "ubuntu@43.156.110.76:/home/ubuntu/HankERP/backups/$f" .
+```
+
+長期應改為自動上傳到物件儲存（Tencent COS／S3），屬 Should Have，待決定部署平台後再做。
+
+---
 
 ## 換網域 / 加 SSL 時的檢查清單
 

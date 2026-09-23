@@ -53,6 +53,7 @@ class PresetCompareItem(BaseModel):
     sheet_width: float
     sheets_used: Optional[int]
     utilization_rate: float
+    unplaced_count: Optional[int] = None
     impossible: bool
 
 

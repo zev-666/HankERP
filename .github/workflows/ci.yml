@@ -66,6 +66,9 @@ jobs:
       - name: 種子資料（含9種角色）
         run: python scripts/seed_data.py
 
+      - name: 資料修正 migration 驗證（v2.1 歷史利用率，downgrade → 寫入舊資料 → upgrade → 查庫比對）
+        run: python scripts/verify_migration_v21.py
+
       - name: 單元測試
         run: pytest -q
 
@@ -97,6 +100,36 @@ jobs:
           for t, c in tags.most_common():
               print(f"  {c:3d}  {t}")
           PY
+
+      - name: 資料庫備份 → 還原往返驗證（跑的是正式環境同一支 infra/backup 腳本）
+        working-directory: .
+        env:
+          PGHOST: localhost
+          PGUSER: erp_user
+          PGPASSWORD: erp_pass_ci
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/backups
+          PG="docker run --rm --network host -e PGHOST -e PGUSER -e PGPASSWORD -v $PWD/infra/backup:/scripts:ro -v /tmp/backups:/backups postgres:16"
+          $PG env PGDATABASE=acrylic_erp BACKUP_ONCE=1 sh /scripts/backup.sh
+          f=$(ls /tmp/backups/acrylic_erp_*.dump | head -1)
+          echo "備份檔：$f（$(du -h "$f" | cut -f1)）"
+          $PG sh /scripts/restore.sh "/backups/$(basename "$f")" acrylic_restore_check --yes
+          Q="SELECT table_name || '=' || (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', table_name), false, true, '')))[1]::text FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY 1"
+          $PG psql -d acrylic_erp -tAc "$Q" > /tmp/src.txt
+          $PG psql -d acrylic_restore_check -tAc "$Q" > /tmp/dst.txt
+          echo "資料表數：原庫 $(wc -l < /tmp/src.txt)，還原庫 $(wc -l < /tmp/dst.txt)"
+          cat /tmp/dst.txt
+          diff /tmp/src.txt /tmp/dst.txt && echo "✓ 每張表列數一致，備份可完整還原"
+
+      - name: 公開端點 rate limit 驗證（必須在最後：會用光額度）
+        run: |
+          for url in /api/v1/public/portfolio /api/v1/public/portfolio/no-such-slug; do
+            codes=$(for i in $(seq 1 125); do curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:8000$url"; done | sort | uniq -c)
+            echo "$url"; echo "$codes"
+            echo "$codes" | grep -q " 429" || { echo "✗ $url 打 125 次沒有出現 429"; exit 1; }
+          done
+          echo "✓ 公開作品端點已套用 rate limit"
 
   frontend:
     name: 前端（build + lint + audit）

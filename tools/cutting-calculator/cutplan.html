@@ -1,0 +1,1059 @@
+<title>開條裁板計畫</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  --ground:#EEF2F1; --surface:#FFFFFF; --surface-2:#F6F8F7;
+  --ink:#14201E; --ink-2:#4E5B58; --ink-3:#879592;
+  --line:#D8E0DD; --line-2:#C3CECA;
+  --teal:#0B6E5F; --teal-soft:#E3F0ED; --teal-line:#9FCEC4;
+  --blade:#CE4A22; --blade-soft:#FCEDE8;
+  --good:#1A7A4A; --good-soft:#E6F5EC;
+  --warn:#9A5B00; --warn-soft:#FBF0DE;
+  --bad:#B4341F; --bad-soft:#FBE9E5;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  --ui:"Archivo",-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+  --r:10px; --r-lg:14px;
+  --shadow:0 1px 2px rgba(20,32,30,.05), 0 8px 24px -16px rgba(20,32,30,.25);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1514; --surface:#161F1D; --surface-2:#1C2624;
+    --ink:#E7EDEB; --ink-2:#A3AFAC; --ink-3:#77837F;
+    --line:#26312E; --line-2:#33403C;
+    --teal:#3FBFA6; --teal-soft:#123029; --teal-line:#1F5B4F;
+    --blade:#FF7E56; --blade-soft:#2E1710;
+    --good:#4CC183; --good-soft:#12291D;
+    --warn:#D9A24A; --warn-soft:#2B2110;
+    --bad:#F0705A; --bad-soft:#2E1512;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1514; --surface:#161F1D; --surface-2:#1C2624;
+  --ink:#E7EDEB; --ink-2:#A3AFAC; --ink-3:#77837F;
+  --line:#26312E; --line-2:#33403C;
+  --teal:#3FBFA6; --teal-soft:#123029; --teal-line:#1F5B4F;
+  --blade:#FF7E56; --blade-soft:#2E1710;
+  --good:#4CC183; --good-soft:#12291D;
+  --warn:#D9A24A; --warn-soft:#2B2110;
+  --bad:#F0705A; --bad-soft:#2E1512;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--ui); font-size:14px; line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{margin:0; font-weight:600; text-wrap:balance; letter-spacing:-.01em}
+button,input,select{font:inherit; color:inherit}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+
+/* ── header ── */
+.top{
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:40;
+  background:color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.top-in{
+  max-width:1440px; margin:0 auto; padding-block:10px; padding-inline:16px;
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+}
+.mark{
+  width:30px; height:30px; border-radius:8px; flex:0 0 auto;
+  background:var(--teal); color:#fff; display:grid; place-items:center;
+  font-weight:700; font-size:15px;
+}
+.top h1{font-size:15px; letter-spacing:0}
+.top .sub{font-size:11.5px; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase}
+.spacer{flex:1 1 auto}
+.chip{
+  font-size:11.5px; padding:3px 9px; border-radius:99px;
+  border:1px solid var(--line-2); color:var(--ink-2); background:var(--surface-2);
+  white-space:nowrap;
+}
+
+/* ── layout ── */
+.wrap{
+  max-width:1440px; margin:0 auto; padding-inline:16px; padding-block:18px 64px;
+  display:grid; grid-template-columns:376px minmax(0,1fr); gap:18px; align-items:start;
+}
+@media(max-width:1000px){ .wrap{grid-template-columns:1fr} }
+
+.panel{
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--r-lg); box-shadow:var(--shadow); overflow:hidden;
+}
+.panel + .panel{margin-top:14px}
+.panel-h{
+  display:flex; align-items:center; gap:9px;
+  padding:12px 15px; border-bottom:1px solid var(--line); background:var(--surface-2);
+}
+.panel-h h2{font-size:13px}
+.panel-h .n{
+  font-family:var(--mono); font-size:10.5px; font-weight:700; color:var(--teal);
+  border:1px solid var(--teal-line); background:var(--teal-soft);
+  border-radius:5px; padding:1px 6px; flex:0 0 auto;
+}
+.panel-h .hint{margin-left:auto; font-size:11.5px; color:var(--ink-3)}
+.panel-b{padding:14px 15px}
+
+/* ── form ── */
+.field{display:flex; flex-direction:column; gap:5px; margin-bottom:11px}
+.field:last-child{margin-bottom:0}
+label{font-size:11.5px; font-weight:500; color:var(--ink-2); letter-spacing:.02em}
+.inp, select.inp{
+  width:100%; padding:9px 10px; border:1px solid var(--line-2); border-radius:var(--r);
+  background:var(--surface); font-size:16px; outline:none; transition:border-color .12s, box-shadow .12s;
+}
+input.inp{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.inp:focus{border-color:var(--teal); box-shadow:0 0 0 3px color-mix(in srgb, var(--teal) 18%, transparent)}
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.row2 .field{margin-bottom:0}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
+
+/* ── parts table ── */
+.ph, .pr{
+  display:grid; grid-template-columns:16px minmax(56px,1.4fr) 62px 62px 56px 34px 28px;
+  gap:6px; align-items:center;
+}
+.ph{margin-bottom:5px; padding-inline:1px}
+.ph span{font-size:10.5px; color:var(--ink-3); letter-spacing:.04em; text-transform:uppercase}
+.ph span:nth-child(n+3):nth-child(-n+5){text-align:center}
+.ph span:nth-child(6){text-align:center}
+.pr{margin-bottom:7px}
+.pr input[type=text], .pr input[type=number]{
+  width:100%; padding:7px 6px; border:1px solid var(--line-2); border-radius:7px;
+  background:var(--surface); font-size:16px; outline:none; text-align:center;
+}
+.pr input[type=text]{text-align:left; font-family:var(--ui); font-size:14px}
+.pr input:focus{border-color:var(--teal); box-shadow:0 0 0 2px color-mix(in srgb, var(--teal) 16%, transparent)}
+.swatch{width:14px; height:14px; border-radius:4px; flex:0 0 auto}
+.rot{display:grid; place-items:center}
+.rot input{width:16px; height:16px; accent-color:var(--teal); cursor:pointer}
+.x{
+  width:26px; height:26px; border:1px solid transparent; background:none; border-radius:6px;
+  color:var(--ink-3); cursor:pointer; display:grid; place-items:center; font-size:14px; line-height:1;
+}
+.x:hover{background:var(--bad-soft); color:var(--bad); border-color:var(--bad)}
+@media(max-width:1000px) and (min-width:641px){
+  .ph,.pr{grid-template-columns:16px minmax(80px,1.6fr) 74px 74px 66px 40px 30px}
+}
+@media(max-width:480px){
+  .ph{grid-template-columns:16px 1fr 1fr 54px 34px 28px}
+  .ph span:nth-child(2){display:none}
+  .pr{grid-template-columns:16px 1fr 1fr 54px 34px 28px; background:var(--surface-2); border-radius:9px; padding:8px 7px}
+  .pr input[type=text]{display:none}
+}
+
+/* ── buttons ── */
+.btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  padding:9px 13px; border-radius:var(--r); border:1px solid var(--line-2);
+  background:var(--surface); font-size:13.5px; font-weight:500; cursor:pointer;
+  transition:background .12s, border-color .12s, transform .06s;
+}
+.btn:hover{background:var(--surface-2)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid var(--teal); outline-offset:2px}
+.btn-primary{background:var(--teal); border-color:var(--teal); color:#fff; font-weight:600}
+.btn-primary:hover{background:color-mix(in srgb, var(--teal) 86%, #000)}
+.btn-wide{width:100%}
+.btn-ghost{background:none}
+
+/* ── metrics ── */
+.mets{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:11px; margin-bottom:14px}
+@media(max-width:700px){.mets{grid-template-columns:1fr 1fr}}
+.met{
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
+  padding:12px 14px; box-shadow:var(--shadow);
+}
+.met .v{font-family:var(--mono); font-size:26px; font-weight:700; line-height:1.05; letter-spacing:-.02em}
+.met .l{font-size:11px; color:var(--ink-3); margin-top:3px; letter-spacing:.03em}
+.met .s{font-size:11.5px; color:var(--ink-2); margin-top:4px; font-family:var(--mono)}
+.met.accent .v{color:var(--teal)}
+.met.blade .v{color:var(--blade)}
+.bar{height:4px; background:var(--line); border-radius:99px; overflow:hidden; margin-top:7px}
+.bar > i{display:block; height:100%; border-radius:99px; background:var(--teal)}
+.bar > i.low{background:var(--warn)}
+
+/* ── notes ── */
+.note{
+  border-radius:var(--r); padding:10px 13px; font-size:12.5px; line-height:1.6;
+  margin-bottom:13px; border:1px solid;
+}
+.note.ok{background:var(--good-soft); border-color:color-mix(in srgb,var(--good) 35%,transparent); color:var(--good)}
+.note.warn{background:var(--warn-soft); border-color:color-mix(in srgb,var(--warn) 35%,transparent); color:var(--warn)}
+.note.bad{background:var(--bad-soft); border-color:color-mix(in srgb,var(--bad) 35%,transparent); color:var(--bad)}
+.note.info{background:var(--teal-soft); border-color:var(--teal-line); color:var(--teal)}
+.note strong{font-weight:700}
+
+/* ── sheet card ── */
+.sheet-card{margin-bottom:14px}
+.sheet-head{
+  display:flex; align-items:center; gap:10px; padding:11px 15px;
+  border-bottom:1px solid var(--line); background:var(--surface-2); flex-wrap:wrap;
+}
+.sheet-head .id{
+  font-family:var(--mono); font-weight:700; font-size:12px; color:#fff; background:var(--ink);
+  border-radius:6px; padding:2px 8px;
+}
+.sheet-head .meta{font-size:12px; color:var(--ink-2); font-family:var(--mono)}
+.svg-wrap{padding:14px 15px; overflow-x:auto}
+svg.layout{display:block; width:100%; height:auto; max-width:100%}
+
+/* ── tables ── */
+.tw{overflow-x:auto; -webkit-overflow-scrolling:touch}
+table{width:100%; border-collapse:collapse; font-size:12.5px}
+th{
+  text-align:left; font-weight:500; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--ink-3); padding:8px 11px; border-bottom:1px solid var(--line-2); white-space:nowrap;
+  background:var(--surface-2); position:sticky; top:0;
+}
+td{padding:7px 11px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--surface-2)}
+td.n, th.n{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.tag{
+  display:inline-flex; align-items:center; font-size:10.5px; font-weight:600; padding:1.5px 7px;
+  border-radius:99px; letter-spacing:.02em;
+}
+.tag.rip{background:var(--blade-soft); color:var(--blade)}
+.tag.cross{background:var(--teal-soft); color:var(--teal)}
+.tag.trim{background:var(--surface-2); color:var(--ink-3); border:1px solid var(--line-2)}
+.tag.a{background:var(--good-soft); color:var(--good)}
+.tag.b{background:var(--warn-soft); color:var(--warn)}
+.tag.c{background:var(--surface-2); color:var(--ink-3)}
+.tag.best{background:var(--teal); color:#fff}
+
+/* ── tabs ── */
+.tabs{display:flex; gap:2px; border-bottom:1px solid var(--line); padding-inline:15px; background:var(--surface-2)}
+.tab{
+  border:none; background:none; padding:9px 11px 8px; font-size:12.5px; font-weight:500;
+  color:var(--ink-3); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;
+}
+.tab[aria-selected="true"]{color:var(--teal); border-bottom-color:var(--teal)}
+.tab:focus-visible{outline:2px solid var(--teal); outline-offset:-2px}
+
+.empty{text-align:center; padding:46px 20px; color:var(--ink-3); font-size:13px}
+.empty .big{font-family:var(--mono); font-size:34px; color:var(--line-2); margin-bottom:8px}
+
+.legend{display:flex; flex-wrap:wrap; gap:5px 14px; margin-bottom:11px; font-size:11.5px; color:var(--ink-2)}
+.legend span{display:inline-flex; align-items:center; gap:5px}
+.legend i{width:11px; height:11px; border-radius:3px; display:inline-block}
+
+.foot{font-size:11.5px; color:var(--ink-3); line-height:1.7; margin-top:6px}
+.foot code{font-family:var(--mono); font-size:11px; background:var(--surface-2); padding:1px 4px; border-radius:4px}
+
+@media print{
+  .top,.left-col,.btns,.tabs,.no-print{display:none !important}
+  .wrap{display:block; padding:0; max-width:none}
+  .panel{border:none; box-shadow:none; break-inside:avoid}
+  .sheet-card{break-inside:avoid; page-break-inside:avoid}
+  body{background:#fff}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none !important; animation:none !important}}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <div class="mark">條</div>
+    <div>
+      <h1>開條裁板計畫</h1>
+      <div class="sub">Guillotine Cut Plan · 壓克力</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="chip" id="chip-sheet">1,915 × 1,315 mm</span>
+    <span class="chip" id="chip-kerf">刀縫 3 mm</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- ══ 輸入 ══ -->
+  <div class="left-col">
+    <section class="panel">
+      <div class="panel-h"><span class="n">01</span><h2>原板與機台</h2></div>
+      <div class="panel-b">
+        <div class="field">
+          <label for="preset">原板型號</label>
+          <select class="inp" id="preset">
+            <option value="">自訂尺寸</option>
+          </select>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="sL">板長 mm</label><input class="inp" type="number" id="sL" value="1915" min="1" step="1"></div>
+          <div class="field"><label for="sW">板寬 mm</label><input class="inp" type="number" id="sW" value="1315" min="1" step="1"></div>
+        </div>
+        <div class="row2" style="margin-top:11px">
+          <div class="field"><label for="kerf">刀縫 mm</label><input class="inp" type="number" id="kerf" value="3" min="0" max="30" step="0.1"></div>
+          <div class="field"><label for="trim">四邊修邊 mm</label><input class="inp" type="number" id="trim" value="0" min="0" max="100" step="0.5"></div>
+        </div>
+        <div class="field" style="margin-top:11px">
+          <label for="remPref">剩料取向</label>
+          <select class="inp" id="remPref">
+            <option value="any" selected>自動：留一整條，方向自己選（建議）</option>
+            <option value="strip">強制沿短邊開條</option>
+            <option value="long">強制沿長邊開條</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="minRem">可回收剩料最小邊長 mm</label>
+          <input class="inp" type="number" id="minRem" value="50" min="0" step="5">
+        </div>
+        <p class="foot">刀縫可填 <code>0</code>，也吃小數（例如 <code>2.5</code>）。修邊預設 <code>0</code>＝板邊直接當基準邊。<br><strong>剩料取向</strong>：預設會兩個開條方向都試，挑「零星碎料最少、整條剩料最大」的那個——S 板排 460×160 會自動選短邊（剩 <code>1315 × 63</code>）；換一組零件若沿長邊比較乾淨，它就會改選長邊。板數永遠優先，<strong>不會為了留整條而多開板</strong>。</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-h"><span class="n">02</span><h2>零件清單</h2><span class="hint" id="part-count">4 種</span></div>
+      <div class="panel-b">
+        <div class="ph">
+          <span></span><span>名稱</span><span>長 mm</span><span>寬 mm</span><span>數量</span><span>可轉</span><span></span>
+        </div>
+        <div id="parts"></div>
+        <div class="btns">
+          <button class="btn" id="add-part" style="flex:1">＋ 新增零件</button>
+          <button class="btn btn-ghost" id="load-demo">載入範例</button>
+          <button class="btn btn-ghost" id="clear-parts">清空</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-h"><span class="n">03</span><h2>計算</h2></div>
+      <div class="panel-b">
+        <div class="field">
+          <label for="mode">計算方式</label>
+          <select class="inp" id="mode">
+            <option value="need">依需求數量 → 算需要幾張板</option>
+            <option value="have">我有固定張數 → 算最多裁幾件</option>
+          </select>
+        </div>
+        <div class="field" id="have-wrap" hidden>
+          <label for="haveSheets">現有板數</label>
+          <input class="inp" type="number" id="haveSheets" value="5" min="1" max="999" step="1">
+        </div>
+        <div class="btns">
+          <button class="btn btn-primary btn-wide" id="run">產生裁切計畫</button>
+        </div>
+        <div class="btns">
+          <button class="btn btn-wide" id="compare">比較全部 9 種板型，找最省</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══ 結果 ══ -->
+  <div id="out">
+    <div class="panel"><div class="empty"><div class="big">▭</div>輸入零件尺寸後按「產生裁切計畫」</div></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ═══════════════════════════════════════════════════════════
+   板型：工廠實際使用的 9 種原板
+   ⚠ S 板 1915×1315 才是本廠的「標準板」。
+     ERP 的 MASTER_SPEC / CLAUDE.md / BFDNestingEngine 預設寫的是
+     2000×1000，那個數字對這家工廠而言是錯的，移植時要一併改掉。
+   ═══════════════════════════════════════════════════════════ */
+const PRESETS = [
+  {name:"S（標準板）", L:1915, W:1315},
+  {name:"T",          L:1905, W:1005},
+  {name:"B",          L:2045, W:1045},
+  {name:"H",          L:2205, W:1105},
+  {name:"a",          L:1855, W:1245},
+  {name:"A2",         L:2365, W:1415},
+  {name:"L",          L:2565, W:1315},
+  {name:"M",          L:3095, W:1585},
+  {name:"2000×1000",  L:2000, W:1000},
+];
+
+const CAI = 300 * 300;                       // 1 才 = 300×300 mm = 90,000 mm²
+const COLORS = ["#0B6E5F","#C2703B","#3D6CB9","#8A4F9E","#1F8A5B","#B5453C",
+                "#2F8C9E","#8B6A1F","#6553B5","#A6455F","#3F7A2E","#96562A"];
+const round1 = (v) => Math.round(v*10)/10;
+
+/* ═══════════════════════════════════════════════════════════
+   引擎：二階段 Guillotine 開條排版
+   真實裁板機只能整刀切穿，所以版面一律是「開條 → 條內分件」。
+   所有排版都在「pack frame」算：x 沿條帶跑、y 是條帶疊起來的方向。
+   axis 決定 pack frame 怎麼貼回真實板材：
+     axis "L" → 條帶沿板長跑（開條刀是橫切），剩料是沿長邊的整條
+     axis "W" → 條帶沿板寬跑（開條刀是縱切），剩料是沿短邊的整條
+   ═══════════════════════════════════════════════════════════ */
+
+function packOnce(pieces, packL, packW, kerf, sortKey, orient, maxSheets, fitMode){
+  const list = pieces.map(p => ({...p}));
+  const LONG = (p)=>Math.max(p.l,p.w), SHORT = (p)=>Math.min(p.l,p.w);
+  const sorters = {
+    height: (a,b)=> (b.h - a.h) || (b.w2 - a.w2),
+    area:   (a,b)=> (b.l*b.w - a.l*a.w) || (b.h - a.h),
+    long:   (a,b)=> (LONG(b) - LONG(a)) || (SHORT(b) - SHORT(a)),
+  };
+  for(const p of list){
+    if(!p.rot){ p.h = p.w; p.w2 = p.l; p.free = false; }
+    else if(orient === "cross"){ p.h = SHORT(p); p.w2 = LONG(p); p.free = false; }
+    else if(orient === "along"){ p.h = LONG(p);  p.w2 = SHORT(p); p.free = false; }
+    else { p.h = p.w; p.w2 = p.l; p.free = true; }
+  }
+  list.sort(sorters[sortKey]);
+
+  const sheets = [], unplaced = [];
+  const orientationsOf = (p) => {
+    let ors;
+    if(!p.rot)      ors = [{h:p.w, w:p.l, rotated:false}];
+    else if(p.free) ors = [{h:p.w, w:p.l, rotated:false}, {h:p.l, w:p.w, rotated:true}];
+    else            ors = [{h:p.h, w:p.w2, rotated: !(p.h === p.w)}];
+    return ors.filter(o => o.h <= packW + 1e-9 && o.w <= packL + 1e-9);
+  };
+
+  for(const p of list){
+    const ors = orientationsOf(p);
+    if(!ors.length){ unplaced.push({...p, why:"尺寸超出原板"}); continue; }
+
+    // fitMode "existing"：只要既有條帶塞得下就塞（傳統 FFDH）
+    // fitMode "waste"   ：比較「塞進既有條帶浪費的高度面積」與「另開一條的代價」，取便宜的
+    //                     ——薄件（骨仔之類）因此會自己另開一條細條帶，而不是佔掉一整條的高度
+    let best = null, newBest = null;
+    for(let si=0; si<sheets.length; si++){
+      const sh = sheets[si];
+      for(let ti=0; ti<sh.strips.length; ti++){
+        const st = sh.strips[ti];
+        for(const o of ors){
+          if(o.h > st.h + 1e-9) continue;
+          const x = st.x + (st.items.length ? kerf : 0);
+          if(x + o.w > packL + 1e-9) continue;
+          const cost = fitMode === "waste"
+            ? (st.h - o.h) * o.w                      // 條帶高度用不到的那塊
+            : (st.h - o.h) * 1e6 + (packL - x - o.w);
+          if(!best || cost < best.cost) best = {cost, kind:"strip", si, ti, x, o};
+        }
+      }
+    }
+    for(let si=0; si<sheets.length; si++){
+      const sh = sheets[si];
+      for(const o of ors){
+        const y = sh.usedH + (sh.strips.length ? kerf : 0);
+        if(y + o.h > packW + 1e-9) continue;
+        const cost = fitMode === "waste"
+          ? kerf * packL + (packL - o.w) * o.h * 0.5  // 多一道開條刀 ＋ 新條帶暫時沒填滿的部分
+          : (packW - y - o.h) * 1e3 + (packL - o.w);
+        if(!newBest || cost < newBest.cost) newBest = {cost, kind:"newstrip", si, y, o};
+      }
+    }
+    if(fitMode === "waste"){
+      if(newBest && (!best || newBest.cost < best.cost)) best = newBest;
+    } else if(!best){
+      best = newBest;
+    }
+    if(!best){
+      if(maxSheets && sheets.length >= maxSheets){ unplaced.push({...p, why:"板數用盡"}); continue; }
+      sheets.push({strips:[], usedH:0});
+      best = {kind:"newstrip", si:sheets.length-1, y:0, o:ors[0]};
+    }
+
+    const sh = sheets[best.si];
+    if(best.kind === "strip"){
+      const st = sh.strips[best.ti];
+      st.items.push({...p, x:best.x, y:st.y, w:best.o.w, h:best.o.h, rotated:best.o.rotated});
+      st.x = best.x + best.o.w;
+    } else {
+      const st = {y:best.y, h:best.o.h, x:best.o.w, items:[]};
+      st.items.push({...p, x:0, y:best.y, w:best.o.w, h:best.o.h, rotated:best.o.rotated});
+      sh.strips.push(st);
+      sh.usedH = best.y + best.o.h;
+    }
+  }
+  return {sheets, unplaced};
+}
+
+/* ── 排法：同尺寸各開各的條（現場師傅的做法）──────────────────
+   「這個尺寸開一條、那個尺寸開一條」：每一種尺寸算出一條裝幾件、
+   要幾條，然後照順序往下疊。骨仔 25/50/75 就會各自得到一條
+   1315×25、1315×50、1315×75，而不是被塞進 630 高的條帶裡。
+   ────────────────────────────────────────────────────────── */
+function packByGroup(pieces, packL, packW, kerf, maxSheets){
+  const groups = new Map();
+  for(const p of pieces){
+    const key = `${p.l}x${p.w}x${p.rot}`;
+    if(!groups.has(key)) groups.set(key, {sample:p, items:[]});
+    groups.get(key).items.push(p);
+  }
+  // 每一組自己挑擺法：讓「總共吃掉的條帶厚度」最小
+  const plan = [];
+  for(const g of groups.values()){
+    const p = g.sample, n = g.items.length;
+    const cands = [];
+    const tryOrient = (h, w, rotated) => {
+      if(h > packW + 1e-9 || w > packL + 1e-9) return;
+      const perStrip = Math.floor((packL + kerf) / (w + kerf));
+      if(perStrip < 1) return;
+      const strips = Math.ceil(n / perStrip);
+      cands.push({h, w, rotated, perStrip, strips, thickness: strips * (h + kerf)});
+    };
+    tryOrient(p.w, p.l, false);
+    if(p.rot && p.l !== p.w) tryOrient(p.l, p.w, true);
+    if(!cands.length){ plan.push({g, impossible:true}); continue; }
+    cands.sort((a,b)=> a.thickness - b.thickness || a.strips - b.strips);
+    plan.push({g, ...cands[0]});
+  }
+  // 厚的先開條，薄的往後排（骨仔自然排在最後）
+  plan.sort((a,b) => (b.h||0) - (a.h||0));
+
+  const sheets = [], unplaced = [];
+  for(const item of plan){
+    if(item.impossible){ item.g.items.forEach(p => unplaced.push({...p, why:"尺寸超出原板"})); continue; }
+    let left = [...item.g.items];
+    while(left.length){
+      const take = left.splice(0, item.perStrip);
+      let sh = sheets.find(s => s.usedH + (s.strips.length ? kerf : 0) + item.h <= packW + 1e-9);
+      if(!sh){
+        if(maxSheets && sheets.length >= maxSheets){ take.forEach(p => unplaced.push({...p, why:"板數用盡"})); continue; }
+        sh = {strips:[], usedH:0}; sheets.push(sh);
+      }
+      const y = sh.usedH + (sh.strips.length ? kerf : 0);
+      const st = {y, h:item.h, x:0, items:[]};
+      take.forEach((p, i) => {
+        const x = i === 0 ? 0 : st.x + kerf;
+        st.items.push({...p, x, y, w:item.w, h:item.h, rotated:item.rotated});
+        st.x = x + item.w;
+      });
+      sh.strips.push(st);
+      sh.usedH = y + item.h;
+    }
+  }
+  return {sheets, unplaced};
+}
+
+/* ── pack frame → 真實板材座標 ── */
+function mapRect(res, x, y, w, h){
+  const t = res.trim;
+  return res.axis === "L"
+    ? {x:t + x, y:t + y, w, h}
+    : {x:t + y, y:t + x, w:h, h:w};
+}
+
+/* ── 剩料（pack frame 計算，回傳真實座標） ── */
+function remnantsOf(sheet, res, minRem){
+  const {packL, packW, kerf} = res;
+  const raw = [];
+  const strips = [...sheet.strips].sort((a,b)=>a.y-b.y);
+  strips.forEach((st, i) => {
+    const gap = st.items.length ? kerf : 0;
+    const w = packL - st.x - gap;
+    if(w > 0.5) raw.push({x:st.x + gap, y:st.y, w, h:st.h, from:`第 ${i+1} 條尾料`, band:false});
+  });
+  const rest = packW - sheet.usedH - (strips.length ? kerf : 0);
+  if(rest > 0.5)
+    raw.push({x:0, y:sheet.usedH + (strips.length ? kerf : 0), w:packL, h:rest,
+              from:res.axis === "W" ? "整條・沿短邊" : "整條・沿長邊", band:true});
+
+  return raw.map(r => {
+    const m = mapRect(res, r.x, r.y, r.w, r.h);
+    const a = r.w * r.h;
+    const dimA = Math.max(m.w, m.h), dimB = Math.min(m.w, m.h);
+    return {...m, long:dimA, short:dimB, area:a, cai:a/CAI, from:r.from, band:r.band,
+            usable: dimB >= minRem && dimA >= minRem,
+            grade: a >= 300*300 ? "A" : a >= 150*150 ? "B" : "C"};
+  }).filter(r => r.usable || r.band);
+}
+
+/* ── 裁切順序：照裁板機動作產生 ── */
+function cutList(sheet, res){
+  const {packL, packW, trim, kerf, axis} = res;
+  const cuts = [];
+  let n = 0;
+  // pack frame：ripPos 是條帶邊界（沿 y）、crossPos 是條內分件（沿 x）
+  const emit = (phase, kind, pos, a, b, note) => {
+    // kind "rip" = pack 的 y=const 線；"cross" = pack 的 x=const 線
+    const isRipRowInSheet = (axis === "L") === (kind === "rip");
+    const dir = isRipRowInSheet ? "橫切" : "縱切";
+    cuts.push({n:++n, phase, dir, kind,
+               pos:round1(trim + pos), from:round1(trim + a), to:round1(trim + b),
+               len:round1(b - a), note});
+  };
+
+  if(trim > 0){
+    cuts.push({n:++n, phase:"修邊", dir:"橫切", kind:"trim", pos:round1(trim), from:0, to:round1(res.sheetL), len:round1(res.sheetL), note:"修下緣基準邊"});
+    cuts.push({n:++n, phase:"修邊", dir:"縱切", kind:"trim", pos:round1(trim), from:0, to:round1(res.sheetW), len:round1(res.sheetW), note:"修左緣基準邊"});
+  }
+
+  const strips = [...sheet.strips].sort((a,b)=>a.y-b.y);
+  // 第一階段：開條
+  strips.forEach((st, i) => {
+    const edge = st.y + st.h;
+    const isLast = i === strips.length - 1;
+    const rest = packW - edge;
+    if(!isLast || rest > kerf + 0.5)
+      emit("開條", "rip", edge, 0, packL, `分出第 ${i+1} 條（條寬 ${round1(st.h)} mm）`);
+  });
+  // 第二階段：條內分件
+  strips.forEach((st, i) => {
+    const items = [...st.items].sort((a,b)=>a.x-b.x);
+    items.forEach((it, j) => {
+      const edge = it.x + it.w;
+      const isLast = j === items.length - 1;
+      const rest = packL - edge;
+      if(!isLast || rest > kerf + 0.5)
+        emit("分件", "cross", edge, st.y, st.y + st.h,
+             `第 ${i+1} 條・切出 ${it.name} ${round1(it.w)}×${round1(it.h)}`);
+    });
+  });
+  return cuts;
+}
+
+/* ── 排版主流程：跑遍所有策略取最優 ── */
+function nest(parts, sheetL, sheetW, kerf, trim, maxSheets, remPref, minRem){
+  minRem = Number.isFinite(minRem) ? minRem : 50;
+  const uL = sheetL - 2*trim, uW = sheetW - 2*trim;
+  if(uL <= 0 || uW <= 0) return {error:"修邊量太大，沒有可用區域"};
+
+  const pieces = [];
+  parts.forEach((p, i) => {
+    for(let k=0; k<p.qty; k++)
+      pieces.push({id:p.id, name:p.name, l:p.l, w:p.w, rot:p.rot, color:COLORS[i%COLORS.length]});
+  });
+  if(!pieces.length) return {error:"沒有有效零件"};
+
+  // 剩料取向 = 硬性指定開條方向，不是加權。若該方向要多開板，另外算一組供對照。
+  const wanted = remPref === "strip" ? ["W"] : remPref === "long" ? ["L"] : ["L","W"];
+  const other  = remPref === "strip" ? ["L"] : remPref === "long" ? ["W"] : [];
+
+  const solve = (axes) => {
+  let best = null;
+
+  for(const axis of axes){
+    const packL = axis === "L" ? uL : uW;
+    const packW = axis === "L" ? uW : uL;
+    for(const sortKey of ["height","long","area"]){
+      for(const orient of ["cross","along","free"]){
+      for(const fitMode of ["waste","existing","group"]){
+        const r = fitMode === "group"
+          ? (sortKey === "height" && orient === "cross"
+              ? packByGroup(pieces, packL, packW, kerf, maxSheets)
+              : null)
+          : packOnce(pieces, packL, packW, kerf, sortKey, orient, maxSheets, fitMode);
+        if(!r) continue;
+        const placed = r.sheets.reduce((s,sh)=>s+sh.strips.reduce((t,st)=>t+st.items.length,0),0);
+        const area   = r.sheets.reduce((s,sh)=>s+sh.strips.reduce((t,st)=>t+st.items.reduce((u,it)=>u+it.w*it.h,0),0),0);
+        const n = r.sheets.length;
+        const cand = {...r, axis, packL, packW, trim, kerf, sheetL, sheetW,
+                      placed, area, sheetsUsed:n,
+                      util: n ? area/(n*sheetL*sheetW) : 0,
+                      strategy:`${axis}/${sortKey}/${orient}/${fitMode}`};
+
+        // 剩料品質
+        //   scraps   = 「可回收但零散」的條尾數量 → 越少越好（這是使用者真正在意的）
+        //   bandArea = 貫穿整板的整條剩料面積 → 越大越好
+        //   細到用不上的碎屑（< minRem）不列入任何一邊
+        let bandArea = 0, scraps = 0, cutCount = 0;
+        r.sheets.forEach((sh, si) => {
+          const rest = packW - sh.usedH - (sh.strips.length ? kerf : 0);
+          // 最後一張板的空白是「還沒用到的板」，不是刻意留下的整條剩料，不列入評分，
+          // 否則演算法會被「最後一張半空的板」騙走，選出一堆碎料的排法。
+          const isTail = r.sheets.length > 1 && si === r.sheets.length - 1;
+          if(!isTail && rest >= minRem && packL >= minRem) bandArea += rest * packL;
+          // 真實刀數：開條刀（最後一條若沒剩料就不用切）＋ 條內分件刀
+          cutCount += sh.strips.length - ((packW - sh.usedH - (sh.strips.length ? kerf : 0)) > kerf + 0.5 ? 0 : 1);
+          sh.strips.forEach(st => {
+            const tail = packL - st.x - (st.items.length ? kerf : 0);
+            cutCount += st.items.length - (tail > kerf + 0.5 ? 0 : 1);
+            if(tail >= minRem && st.h >= minRem) scraps++;
+          });
+        });
+        cand.bandArea = bandArea; cand.scraps = scraps; cand.cutCount = cutCount;
+        cand.byGroup = fitMode === "group";
+
+        if(!best){ best = cand; continue; }
+        if(cand.placed !== best.placed){ if(cand.placed > best.placed) best = cand; continue; }
+        if(cand.sheetsUsed !== best.sheetsUsed){ if(cand.sheetsUsed < best.sheetsUsed) best = cand; continue; }
+        // 同板數下的取捨順序（使用者 2026-09-20 指定：刀數少、利用率好就是對的）
+        //   1. 利用率高
+        //   2. 整條剩料大（能再用的長條）
+        //   3. 刀數少
+        //   4. 零星碎料少
+        if(Math.abs(cand.util - best.util) > 1e-9){ if(cand.util > best.util) best = cand; continue; }
+        if(Math.abs(cand.bandArea - best.bandArea) > 1){ if(cand.bandArea > best.bandArea) best = cand; continue; }
+        if(cand.cutCount !== best.cutCount){ if(cand.cutCount < best.cutCount) best = cand; continue; }
+        if(cand.scraps < best.scraps) best = cand;
+      }
+      }
+    }
+  }
+  return best;
+  };
+
+  let best = solve(wanted);
+  if(best && other.length){
+    const alt = solve(other);
+    if(alt){
+      if(alt.placed > best.placed){
+        // 指定的開條方向根本排不下（例如不可旋轉的長件），自動改用另一個方向
+        const forcedFrom = wanted[0];
+        best = alt;
+        best.forced = {from: forcedFrom, lost: alt.placed - (best.placed - alt.placed)};
+        best.forcedFrom = forcedFrom;
+      } else if(alt.placed === best.placed && alt.placed > 0 && alt.sheetsUsed < best.sheetsUsed){
+        best.alt = alt;   // 排得一樣多但比較省板：尊重使用者的選擇，但要講出來
+      }
+    }
+  }
+  return best;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UI
+   ═══════════════════════════════════════════════════════════ */
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const fmt = (v, d=0) => v.toLocaleString("en-US",{minimumFractionDigits:d, maximumFractionDigits:d});
+const esc = (s) => String(s??"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/** 0 是合法值，不可用 || 當預設（舊版計算器的 bug） */
+function numVal(id, dflt, min, max){
+  const v = parseFloat($("#"+id).value);
+  if(!Number.isFinite(v)) return dflt;
+  if(min !== undefined && v < min) return min;
+  if(max !== undefined && v > max) return max;
+  return v;
+}
+
+let rowSeq = 0;
+function addRow(name="", l="", w="", qty=1, rot=true){
+  const id = ++rowSeq;
+  const i = $$("#parts .pr").length;
+  const el = document.createElement("div");
+  el.className = "pr"; el.dataset.id = id;
+  el.innerHTML =
+    `<span class="swatch" style="background:${COLORS[i%COLORS.length]}"></span>`+
+    `<input type="text" id="pn-${id}" value="${esc(name)}" placeholder="零件名稱" aria-label="名稱">`+
+    `<input type="number" id="pl-${id}" value="${l}" placeholder="長" min="1" step="0.1" aria-label="長 mm">`+
+    `<input type="number" id="pw-${id}" value="${w}" placeholder="寬" min="1" step="0.1" aria-label="寬 mm">`+
+    `<input type="number" id="pq-${id}" value="${qty}" min="1" step="1" aria-label="數量">`+
+    `<span class="rot"><input type="checkbox" id="pr-${id}" ${rot?"checked":""} aria-label="可旋轉 90 度"></span>`+
+    `<button class="x" aria-label="刪除這列">✕</button>`;
+  el.querySelector(".x").addEventListener("click", () => { el.remove(); recolor(); });
+  $("#parts").appendChild(el);
+  recolor();
+}
+function recolor(){
+  $$("#parts .pr").forEach((r,i) => { r.querySelector(".swatch").style.background = COLORS[i%COLORS.length]; });
+  $("#part-count").textContent = $$("#parts .pr").length + " 種";
+}
+function readParts(){
+  return $$("#parts .pr").map((r, i) => {
+    const id = r.dataset.id;
+    const l = parseFloat($("#pl-"+id).value), w = parseFloat($("#pw-"+id).value);
+    const q = parseInt($("#pq-"+id).value, 10);
+    return {
+      id:"P"+(i+1),
+      name: $("#pn-"+id).value.trim() || ("P"+(i+1)),
+      l: Number.isFinite(l) ? l : 0,
+      w: Number.isFinite(w) ? w : 0,
+      qty: Number.isFinite(q) && q > 0 ? q : 0,
+      rot: $("#pr-"+id).checked,
+    };
+  }).filter(p => p.l > 0 && p.w > 0 && p.qty > 0);
+}
+function loadDemo(){
+  $("#parts").innerHTML = ""; rowSeq = 0;
+  addRow("側板", 630, 400, 4);
+  addRow("層板", 630, 200, 6);
+  addRow("背板", 630, 300, 2);
+  addRow("骨仔1", 600, 75, 2);
+  addRow("骨仔2", 600, 50, 2);
+  addRow("骨仔3", 600, 25, 2);
+}
+function syncChips(){
+  $("#chip-sheet").textContent = `${fmt(numVal("sL",2000,1))} × ${fmt(numVal("sW",1000,1))} mm`;
+  $("#chip-kerf").textContent  = `刀縫 ${numVal("kerf",3,0,30)} mm`;
+}
+
+/* ── 排版圖 ── */
+function drawSheet(sheet, res, idx, minRem){
+  const {sheetL:SL, sheetW:SW, trim} = res;
+  const pad = Math.max(42, Math.max(SL, SW) / 28);
+  const fs = Math.max(SL, SW) / 62;
+  let s = `<svg class="layout" viewBox="0 0 ${SL+pad*2} ${SW+pad*2}" role="img" aria-label="第 ${idx+1} 張板排版圖">`;
+  s += `<rect x="${pad}" y="${pad}" width="${SL}" height="${SW}" fill="var(--surface-2)" stroke="var(--line-2)" stroke-width="${Math.max(1.4, SL/900)}"/>`;
+  if(trim > 0)
+    s += `<rect x="${pad+trim}" y="${pad+trim}" width="${SL-2*trim}" height="${SW-2*trim}" fill="none" stroke="var(--ink-3)" stroke-width="${Math.max(1,SL/1600)}" stroke-dasharray="${SL/120} ${SL/160}"/>`;
+
+  // 整條剩料先畫（襯在底下）
+  remnantsOf(sheet, res, minRem).filter(r=>r.band).forEach(r => {
+    s += `<rect x="${pad+r.x}" y="${pad+r.y}" width="${r.w}" height="${r.h}" fill="var(--teal)" fill-opacity="0.07" stroke="var(--teal)" stroke-width="${Math.max(1,SL/1400)}" stroke-dasharray="${SL/90} ${SL/140}"/>`;
+    if(Math.min(r.w,r.h) > fs*1.3)
+      s += `<text x="${pad+r.x+r.w/2}" y="${pad+r.y+r.h/2}" font-size="${fs*0.9}" font-family="JetBrains Mono, monospace" fill="var(--teal)" text-anchor="middle" dominant-baseline="central">整條剩料 ${round1(r.long)}×${round1(r.short)}</text>`;
+  });
+
+  // 零件
+  sheet.strips.forEach(st => st.items.forEach(it => {
+    const m = mapRect(res, it.x, it.y, it.w, it.h);
+    s += `<rect x="${pad+m.x}" y="${pad+m.y}" width="${m.w}" height="${m.h}" fill="${it.color}" fill-opacity="0.18" stroke="${it.color}" stroke-width="${Math.max(1.4, SL/750)}"/>`;
+    if(Math.min(m.w, m.h) > fs*2.4)
+      s += `<text x="${pad+m.x+m.w/2}" y="${pad+m.y+m.h/2}" font-size="${fs}" font-family="JetBrains Mono, monospace" fill="${it.color}" text-anchor="middle" dominant-baseline="central">${round1(m.w)}×${round1(m.h)}</text>`;
+  }));
+
+  // 裁切線與刀號
+  const sw = Math.max(1.2, SL/1100), dash = `${SL/100} ${SL/200}`;
+  cutList(sheet, res).forEach(c => {
+    const isH = c.dir === "橫切";
+    const x1 = isH ? pad + c.from : pad + c.pos;
+    const x2 = isH ? pad + c.to   : pad + c.pos;
+    const y1 = isH ? pad + c.pos  : pad + c.from;
+    const y2 = isH ? pad + c.pos  : pad + c.to;
+    const isRip = c.phase === "開條";
+    s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--blade)" stroke-width="${isRip?sw*1.6:sw}" stroke-dasharray="${isRip?"":dash}" opacity="${isRip?1:0.8}"/>`;
+    const bx = isH ? x1 + fs*1.4 : x1;
+    const by = isH ? y1 : y1 + fs*1.4;
+    s += `<circle cx="${bx}" cy="${by}" r="${fs*0.9}" fill="var(--blade)"/>`;
+    s += `<text x="${bx}" y="${by}" font-size="${fs*0.8}" font-family="JetBrains Mono, monospace" fill="#fff" text-anchor="middle" dominant-baseline="central" font-weight="700">${c.n}</text>`;
+  });
+
+  s += `<text x="${pad+SL/2}" y="${pad-fs*0.9}" font-size="${fs*0.95}" font-family="JetBrains Mono, monospace" fill="var(--ink-3)" text-anchor="middle">${fmt(SL)} mm</text>`;
+  s += `<text x="${pad-fs*0.9}" y="${pad+SW/2}" font-size="${fs*0.95}" font-family="JetBrains Mono, monospace" fill="var(--ink-3)" text-anchor="middle" transform="rotate(-90 ${pad-fs*0.9} ${pad+SW/2})">${fmt(SW)} mm</text>`;
+  return s + `</svg>`;
+}
+
+/* ── 主流程 ── */
+function run(){
+  syncChips();
+  const parts = readParts();
+  const SL = numVal("sL",2000,1), SW = numVal("sW",1000,1);
+  const kerf = numVal("kerf",3,0,30), trim = numVal("trim",0,0,200);
+  const minRem = numVal("minRem",50,0);
+  const remPref = $("#remPref").value;
+  const mode = $("#mode").value;
+  const maxSheets = mode === "have" ? Math.max(1, Math.round(numVal("haveSheets",5,1,999))) : 0;
+
+  if(!parts.length){ $("#out").innerHTML = `<div class="panel"><div class="empty"><div class="big">▭</div>請至少輸入一個零件的長、寬、數量</div></div>`; return; }
+
+  const res = nest(parts, SL, SW, kerf, trim, maxSheets, remPref, minRem);
+  if(res.error){ $("#out").innerHTML = `<div class="note bad">${esc(res.error)}</div>`; return; }
+
+  const need = parts.reduce((s,p)=>s+p.qty,0);
+  const allCuts = res.sheets.map(sh => cutList(sh, res));
+  const totalCuts = allCuts.reduce((s,c)=>s+c.length,0);
+  const allRem = res.sheets.map(sh => remnantsOf(sh, res, minRem));
+  const flatRem = allRem.flat();
+  const bands = flatRem.filter(r=>r.band && r.usable);
+  const remCai = flatRem.filter(r=>r.usable).reduce((s,r)=>s+r.cai,0);
+  const utilPct = res.util * 100;
+  const ripDir = res.axis === "W" ? "縱切（沿短邊開條）" : "橫切（沿長邊開條）";
+
+  const doneBy = {};
+  res.sheets.forEach(sh => sh.strips.forEach(st => st.items.forEach(it => { doneBy[it.id] = (doneBy[it.id]||0)+1; })));
+
+  let h = "";
+  h += `<div class="mets">
+    <div class="met accent"><div class="v">${res.sheetsUsed}</div><div class="l">${mode==="have"?"使用板數":"需要原板（張）"}</div><div class="s">${fmt(SL)}×${fmt(SW)}</div></div>
+    <div class="met"><div class="v" style="color:${utilPct>=75?"var(--good)":"var(--warn)"}">${utilPct.toFixed(1)}%</div><div class="l">板材利用率</div><div class="bar"><i class="${utilPct>=75?"":"low"}" style="width:${Math.min(100,utilPct)}%"></i></div></div>
+    <div class="met"><div class="v">${res.placed}<span style="font-size:15px;color:var(--ink-3)"> / ${need}</span></div><div class="l">已排入 / 需求（件）</div><div class="s">${(res.area/CAI).toFixed(2)} 才</div></div>
+    <div class="met blade"><div class="v">${totalCuts}</div><div class="l">裁切刀數</div><div class="s">可用剩料 ${remCai.toFixed(2)} 才</div></div>
+  </div>`;
+
+  if(res.unplaced.length){
+    const over = res.unplaced.filter(u=>u.why==="尺寸超出原板");
+    h += `<div class="note bad"><strong>⚠ ${res.unplaced.length} 件沒有排進去。</strong>`+
+      (over.length ? ` 其中 ${over.length} 件尺寸超出可用範圍（${fmt(res.packL>res.packW?res.packL:res.packW)}×${fmt(Math.min(res.packL,res.packW))} mm）。` : ` 板數不足，改用「依需求數量」模式可算出實際需要幾張。`)+`</div>`;
+  } else {
+    h += `<div class="note ok"><strong>✓ 全部 ${need} 件都排得進去</strong>，共 ${res.sheetsUsed} 張 ${fmt(SL)}×${fmt(SW)} mm 原板，需要下 ${totalCuts} 刀。</div>`;
+  }
+
+  if(bands.length){
+    const list = bands.map(b => `${round1(b.long)} × ${round1(b.short)}`).join("、");
+    h += `<div class="note info"><strong>整條剩料：${list}</strong>（共 ${bands.length} 條，${bands.reduce((s,b)=>s+b.cai,0).toFixed(2)} 才）。第一刀方向為 <strong>${ripDir}</strong>，所以剩料是完整一條、邊是直的，可以直接上架再用。</div>`;
+  } else {
+    h += `<div class="note warn">這組尺寸剛好把板用滿，<strong>沒有留下整條剩料</strong>。若想保留可再用的長條，可以把需求數量調整成整條的倍數。</div>`;
+  }
+
+  if(res.forcedFrom){
+    const asked = res.forcedFrom === "W" ? "沿短邊" : "沿長邊";
+    const used  = res.axis === "W" ? "沿短邊" : "沿長邊";
+    h += `<div class="note warn"><strong>已自動改成「${used}開條」。</strong>你選的「${asked}開條」在這組尺寸下排不下（通常是有不可旋轉的長件，長度超過該方向的板邊）。若一定要${asked}，請把該零件的「可轉」打勾，或換更大的板型。</div>`;
+  }
+
+  if(res.alt){
+    const dirNow = res.axis === "W" ? "沿短邊" : "沿長邊";
+    const dirAlt = res.alt.axis === "W" ? "沿短邊" : "沿長邊";
+    h += `<div class="note warn"><strong>⚠ 這個開條方向比較費板。</strong>你選的「${dirNow}開條」需要 <strong>${res.sheetsUsed} 張</strong>；改成「${dirAlt}開條」只要 <strong>${res.alt.sheetsUsed} 張</strong>（利用率 ${(res.alt.util*100).toFixed(1)}%）。要省材料就把上方「剩料取向」改掉；要整條剩料就維持現狀。</div>`;
+  }
+
+  h += `<section class="panel"><div class="panel-h"><span class="n">A</span><h2>零件完成度</h2></div>
+    <div class="tw"><table><thead><tr><th>零件</th><th class="n">尺寸 mm</th><th class="n">需求</th><th class="n">排入</th><th>可轉</th><th>狀態</th></tr></thead><tbody>`;
+  parts.forEach((p,i) => {
+    const got = doneBy[p.id] || 0;
+    h += `<tr><td><span class="swatch" style="display:inline-block;background:${COLORS[i%COLORS.length]};margin-right:7px;vertical-align:-2px"></span>${esc(p.name)}</td>`+
+      `<td class="n">${round1(p.l)} × ${round1(p.w)}</td><td class="n">${p.qty}</td><td class="n">${got}</td><td>${p.rot?"是":"否"}</td>`+
+      `<td>${got>=p.qty?'<span class="tag a">✓ 完成</span>':`<span class="tag c" style="background:var(--bad-soft);color:var(--bad)">缺 ${p.qty-got} 件</span>`}</td></tr>`;
+  });
+  h += `</tbody></table></div></section>`;
+
+  // 同排法的板合併顯示：59 張裡若有 58 張長得一樣，只畫一次
+  const sigOf = (sh) => JSON.stringify(sh.strips.map(st => [
+    Math.round(st.y), Math.round(st.h),
+    st.items.map(it => [Math.round(it.x), Math.round(it.w), Math.round(it.h), it.id])
+  ]));
+  const groups = []; const gIndex = new Map();
+  res.sheets.forEach((sh, i) => {
+    const k = sigOf(sh);
+    if(gIndex.has(k)) groups[gIndex.get(k)].nums.push(i + 1);
+    else { gIndex.set(k, groups.length); groups.push({first:i, nums:[i + 1]}); }
+  });
+  const label = (nums) => {
+    if(nums.length === 1) return `板 ${nums[0]}`;
+    const contiguous = nums[nums.length-1] - nums[0] === nums.length - 1;
+    return contiguous ? `板 ${nums[0]}–${nums[nums.length-1]}` : `板 ${nums.slice(0,3).join("、")}…`;
+  };
+  if(groups.length < res.sheets.length){
+    h += `<div class="note info">${res.sheetsUsed} 張板只有 <strong>${groups.length} 種排法</strong>，相同的已合併，下面每種只列一次。</div>`;
+  }
+
+  groups.forEach((g, gi) => {
+    const i = g.first, n = g.nums.length;
+    const sh = res.sheets[i];
+    const cuts = allCuts[i];
+    const rem = allRem[i].filter(r => r.usable);
+    const items = sh.strips.reduce((s,st)=>s+st.items.length,0);
+    const area = sh.strips.reduce((s,st)=>s+st.items.reduce((t,it)=>t+it.w*it.h,0),0);
+    const per = n > 1 ? " / 張" : "";
+    h += `<section class="panel sheet-card">
+      <div class="sheet-head">
+        <span class="id">${label(g.nums)}</span>
+        ${n > 1 ? `<span class="tag best">× ${n} 張</span>` : ""}
+        <span class="meta">${sh.strips.length} 條 · ${items} 件${per} · 利用率 ${(area/(SL*SW)*100).toFixed(1)}% · ${cuts.length} 刀${per} · 開條 ${res.axis==="W"?"縱切":"橫切"}</span>
+        <div class="spacer"></div>
+        <button class="btn no-print" data-print="1" style="padding:5px 10px;font-size:12px">列印</button>
+      </div>
+      <div class="svg-wrap">${drawSheet(sh, res, i, minRem)}</div>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" data-tab="cuts-${gi}">裁切順序（${cuts.length} 刀${per}）</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="rem-${gi}">可回收剩料（${rem.length}${per}）</button>
+      </div>
+      <div id="cuts-${gi}" class="tw"><table><thead><tr><th class="n">#</th><th>階段</th><th>方向</th><th class="n">基準位置 mm</th><th class="n">刀長 mm</th><th>說明</th></tr></thead><tbody>`;
+    cuts.forEach(c => {
+      const tag = c.phase === "開條" ? "rip" : c.phase === "分件" ? "cross" : "trim";
+      h += `<tr><td class="n">${String(c.n).padStart(2,"0")}</td><td><span class="tag ${tag}">${c.phase}</span></td><td>${c.dir}</td><td class="n">${c.pos}</td><td class="n">${c.len}</td><td style="white-space:normal;color:var(--ink-2)">${esc(c.note)}</td></tr>`;
+    });
+    h += `</tbody></table></div><div id="rem-${gi}" class="tw" hidden>`;
+    if(rem.length){
+      h += `<table><thead><tr><th class="n">尺寸 mm</th><th class="n">才</th>${n>1?'<th class="n">共幾塊</th>':""}<th>等級</th><th>形式</th><th class="n">位置 X,Y</th><th>來源</th></tr></thead><tbody>`;
+      rem.sort((a,b)=>b.area-a.area).forEach(r => {
+        h += `<tr><td class="n"><strong>${round1(r.long)} × ${round1(r.short)}</strong></td><td class="n">${r.cai.toFixed(2)}</td>`+
+          (n>1?`<td class="n">${n}</td>`:"")+
+          `<td><span class="tag ${r.grade.toLowerCase()}">${r.grade}</span></td>`+
+          `<td>${r.band?'<span class="tag cross">整條</span>':'<span class="tag c">零星</span>'}</td>`+
+          `<td class="n">${round1(r.x)}, ${round1(r.y)}</td><td style="color:var(--ink-2)">${esc(r.from)}</td></tr>`;
+      });
+      h += `</tbody></table>`;
+    } else {
+      h += `<div class="empty" style="padding:26px">這張板沒有達到回收門檻（${minRem} mm）的剩料</div>`;
+    }
+    h += `</div></section>`;
+  });
+
+  h += `<p class="foot">等級：A ≥ 300×300 mm（一才以上）· B ≥ 150×150 mm · C 其餘。<strong>實線</strong>＝開條刀（整刀切穿），<strong>虛線</strong>＝條內分件刀。策略：<code>${esc(res.strategy)}</code>（已自動比較 18 種排法）</p>`;
+
+  $("#out").innerHTML = h;
+  wireTabs();
+}
+
+function compare(){
+  syncChips();
+  const parts = readParts();
+  if(!parts.length){ $("#out").innerHTML = `<div class="panel"><div class="empty"><div class="big">▭</div>請先輸入零件</div></div>`; return; }
+  const kerf = numVal("kerf",3,0,30), trim = numVal("trim",0,0,200), minRem = numVal("minRem",50,0);
+  const remPref = $("#remPref").value;
+  const need = parts.reduce((s,p)=>s+p.qty,0);
+
+  const rows = PRESETS.map(pr => {
+    const r = nest(parts, pr.L, pr.W, kerf, trim, 0, remPref, minRem);
+    if(r.error || r.placed < need) return {...pr, ok:false, placed:r.placed||0};
+    const bands = r.sheets.map(sh => remnantsOf(sh, r, minRem)).flat().filter(x=>x.band && x.usable);
+    const bandTxt = bands.length ? `${round1(bands[0].long)} × ${round1(bands[0].short)}${bands.length>1?` ×${bands.length}`:""}` : "—";
+    return {...pr, ok:true, sheets:r.sheetsUsed, util:r.util*100,
+            cai:r.sheetsUsed*pr.L*pr.W/CAI, band:bandTxt,
+            bandCai:bands.reduce((s,b)=>s+b.cai,0), placed:r.placed};
+  });
+  const ok = rows.filter(r=>r.ok);
+  let best = null;
+  if(ok.length){
+    const minS = Math.min(...ok.map(r=>r.sheets));
+    best = ok.filter(r=>r.sheets===minS).sort((a,b)=> b.bandCai - a.bandCai || b.util - a.util)[0];
+  }
+
+  let h = "";
+  h += best
+    ? `<div class="note ok"><strong>✓ 最省：${esc(best.name)}　${fmt(best.L)} × ${fmt(best.W)} mm</strong> — ${best.sheets} 張，利用率 ${best.util.toFixed(1)}%，共 ${best.cai.toFixed(1)} 才${best.band!=="—"?`，整條剩料 ${best.band}`:""}。</div>`
+    : `<div class="note bad"><strong>⚠ 沒有任何板型排得下全部零件</strong>（需求 ${need} 件）。請檢查是否有零件超過最大板 3095 × 1585 mm。</div>`;
+
+  h += `<section class="panel"><div class="panel-h"><span class="n">B</span><h2>9 種板型比較</h2><span class="hint">刀縫 ${kerf} mm${trim>0?` · 修邊 ${trim} mm`:""}</span></div>
+    <div class="tw"><table><thead><tr><th>板型</th><th class="n">尺寸 mm</th><th class="n">張數</th><th class="n">利用率</th><th class="n">總才數</th><th class="n">整條剩料</th><th></th></tr></thead><tbody>`;
+  rows.forEach(r => {
+    const isBest = best && r.name === best.name;
+    h += `<tr><td style="font-weight:${isBest?600:400}">${esc(r.name)}</td><td class="n">${fmt(r.L)} × ${fmt(r.W)}</td>`+
+      `<td class="n">${r.ok?r.sheets:"—"}</td><td class="n">${r.ok?r.util.toFixed(1)+"%":"—"}</td>`+
+      `<td class="n">${r.ok?r.cai.toFixed(1):"—"}</td><td class="n">${r.ok?esc(r.band):"—"}</td>`+
+      `<td>${isBest?'<span class="tag best">最省</span>':(r.ok?"":`<span class="tag c">排不下（${r.placed}/${need}）</span>`)}</td></tr>`;
+  });
+  h += `</tbody></table></div></section>`;
+  h += `<p class="foot">「總才數」＝ 張數 × 單張才數，是實際要買的材料量，比利用率更能反映成本。點任一列可帶入該板型並重算完整刀序。</p>`;
+  $("#out").innerHTML = h;
+
+  $$("#out tbody tr").forEach((tr, i) => {
+    tr.style.cursor = "pointer";
+    tr.addEventListener("click", () => {
+      $("#sL").value = rows[i].L; $("#sW").value = rows[i].W; $("#preset").value = String(i);
+      syncChips(); run(); window.scrollTo({top:0, behavior:"smooth"});
+    });
+  });
+}
+
+function wireTabs(){
+  $$("#out .tabs").forEach(group => {
+    const tabs = $$(".tab", group);
+    tabs.forEach(t => t.addEventListener("click", () => {
+      tabs.forEach(o => {
+        o.setAttribute("aria-selected", String(o === t));
+        const panel = document.getElementById(o.dataset.tab);
+        if(panel) panel.hidden = (o !== t);
+      });
+    }));
+  });
+  $$('#out [data-print]').forEach(b => b.addEventListener("click", () => window.print()));
+}
+
+/* ── init ── */
+PRESETS.forEach((p, i) => {
+  const o = document.createElement("option");
+  o.value = String(i); o.textContent = `${p.name}　${fmt(p.L)} × ${fmt(p.W)} mm`;
+  $("#preset").appendChild(o);
+});
+$("#preset").value = "0";   // 預設 S 板（本廠標準板）
+$("#preset").addEventListener("change", e => {
+  if(e.target.value === "") return;
+  $("#sL").value = PRESETS[+e.target.value].L;
+  $("#sW").value = PRESETS[+e.target.value].W;
+  syncChips();
+});
+["sL","sW","kerf"].forEach(id => $("#"+id).addEventListener("input", syncChips));
+$("#mode").addEventListener("change", e => { $("#have-wrap").hidden = e.target.value !== "have"; });
+$("#add-part").addEventListener("click", () => addRow());
+$("#load-demo").addEventListener("click", () => { loadDemo(); run(); });
+$("#clear-parts").addEventListener("click", () => { $("#parts").innerHTML = ""; rowSeq = 0; recolor(); });
+$("#run").addEventListener("click", run);
+$("#compare").addEventListener("click", compare);
+$("#remPref").addEventListener("change", run);
+
+loadDemo();
+syncChips();
+run();
+</script>

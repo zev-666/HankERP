@@ -886,6 +886,9 @@ class BFDNestingEngine:
                     sheets.append(new_sheet)
 
         # 計算利用率
+        # ⚠️ v2.1 更正：下面這段（規格書原始參考碼）的分子用「需求零件總面積」，是錯的——
+        #    零件排不下時會回報 100%。實作已改為「實際放置面積 ÷ 用板面積」，
+        #    並回傳 unplaced / placed_count / requested_count。以 backend/app/ai/nesting_bfd.py 為準。
         total_part_area = sum(p.length * p.width for p in all_parts)
         total_sheet_area = len(sheets) * self.sheet_length * self.sheet_width
         utilization = total_part_area / total_sheet_area

@@ -5,7 +5,7 @@
 
 | | |
 |---|---|
-| **目前版本** | v2.0（2026-09-14） |
+| **目前版本** | v2.1（2026-09-23，穩固系統第一輪：利用率修正、資料庫備份、公開端點限流） |
 | **後端** | FastAPI 0.135 + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL 15/16 + Celery + Redis |
 | **前端** | Next.js 16.3.5 + Tailwind CSS + TanStack Query + Zustand + Recharts |
 | **實測規模** | 13 個業務模組 · 68 個業務 API 端點（＋`/health` 共 69）· 30 張業務資料表 · 23 條前端路由（21 靜態 ＋ 2 動態）|
@@ -176,6 +176,52 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > v1.0–v1.9 的交付物為 `acrylic-erp-verified.zip`；**v2.0 起改以 git 儲存庫
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
+
+### v2.1（2026-09-23）— 穩固系統第一輪：利用率修正、資料庫備份、公開端點限流
+
+**背景**：依 2026-09-19 決定的工作順序「先穩固現有系統（① 備份 ② 利用率 ③ RBAC），再重做裁切引擎」。
+本版完成 ①② 與一項規則違反（公開端點缺 rate limit）；③ RBAC 留到下一版。
+
+#### A. 裁切利用率算錯，並污染廠長儀表板 KPI（已修正）
+
+| | 舊版 | v2.1 |
+|---|---|---|
+| 利用率分子 | 需求零件總面積 | **實際放上板的面積** |
+| 2000×1000 零件放 2000×1000 板、刀縫 3 | 0 件排入、利用率 **1.0**、廢料 0、用板 1 張 | 0 件排入、利用率 **0**、用板 **0** 張、`unplaced` 1 件 |
+| 3000×100 ×1 ＋ 500×300 ×4 @2000×1000 | 利用率 0.45 | **0.30** |
+| 排不下的零件 | 靜默消失 | 回傳 `unplaced`（含原因）、`placed_count`、`requested_count`；job 狀態 `partial`；前端紅色警示 |
+| 9 種板型比較 | 有零件排不下的板型也可能被推薦 | 有 `unplaced` 的板型標 `impossible`，不會被推薦 |
+
+- `analytics` 只統計 `status='completed'` 的 job，`partial` 自然不進 KPI
+- migration `c3e8f1a2b4d5`（純資料，不改 schema）：由 `result_json.placements` 重算歷史 `nesting_jobs`，
+  舊值備份在 `result_json.legacy_v20`，`alembic downgrade` 可還原。**歷史 KPI 數字會下降，這是修正，不是退步**
+
+**怎麼驗證的**
+- ✅ 沙盒以 pytest shim 實際執行 `tests/test_nesting_bfd.py`：**21 項全過**（原 17 ＋ 新 4，並更新 1 項舊斷言）；
+  同一份測試換回舊引擎執行，**新增／更新的 5 項確實失敗**——證明測試抓得到這個 bug
+- ✅ migration 的 `recompute()` 拿舊引擎 4 組輸出重算，結果與新引擎逐欄一致
+- ⚠️ 真實 PostgreSQL 上跑 migration、真實 HTTP 回應：沙盒連不到 PyPI／npm，無法執行。
+  已寫成 CI 步驟 `scripts/verify_migration_v21.py`（downgrade → 寫入舊格式資料 → upgrade → 查庫比對 → downgrade 還原 → 再 upgrade），
+  **待 GitHub Actions 綠燈**
+
+#### B. 資料庫自動備份（先前完全沒有）
+- `docker-compose.yml` 新增 `db-backup` 容器（與 db 同映像），執行 `infra/backup/backup.sh`：
+  每天 `pg_dump -Fc`、做完立刻 `pg_restore --list` 驗證、保留 14 天
+- `infra/backup/restore.sh`：必須帶 `--yes` 才會覆蓋；建議先還原到新資料庫檢查
+- `.gitignore` 排除 `backups/`、`*.dump`
+- **怎麼驗證的**：`sh -n` 語法檢查、compose YAML 解析 ✅；CI 新增「用同一支腳本備份 → 還原到新庫 → 每張表列數 diff」⚠️ 待 CI
+- ⚠️ 備份與資料庫在同一台主機，**異地備份尚未設定**（`DEPLOYMENT.md`「資料庫備份」有手動下載步驟）
+
+#### C. 公開作品端點補上 rate limit（第 8 次文件與程式不符的修正）
+- `GET /api/v1/public/portfolio`、`GET /api/v1/public/portfolio/{slug}` 套 `@limiter.limit("120/minute")`
+- 額度刻意放寬：官網 Server Component 以 `revalidate: 60` 快取，SSR 請求全部來自前端容器同一 IP
+- **怎麼驗證的**：CI 最後一步各打 125 次，必須出現 429 ⚠️ 待 CI
+
+#### D. 數字
+端點 68、資料表 30、前端路由 23 **本版未變**（只改既有端點回傳欄位；migration 不建表）。pytest 17 → 21。
+
+#### E. 下一版
+③ RBAC 執行層：`roles.permissions` 目前只存在資料庫，沒有任何端點檢查。
 
 ### v2.0（2026-09-14）— 三份檔案合併整合 ＋ 補上斷掉的業務流程
 

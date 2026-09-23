@@ -84,8 +84,9 @@ async def calculate_nesting(
     ]
     result = engine.nest(nest_parts)
 
-    # 儲存結果
-    job.status = "completed"
+    # 儲存結果（有零件排不進去時標 partial，不再當成完整完成）
+    unplaced = result["unplaced"]
+    job.status = "partial" if unplaced else "completed"
     job.sheets_used = result["sheets_used"]
     job.utilization_rate = result["utilization_rate"]
     job.total_waste_area_mm2 = result["waste_area_mm2"]
@@ -93,12 +94,21 @@ async def calculate_nesting(
 
     await db.flush()
 
+    message = (
+        f"有 {len(unplaced)} 件零件排不進 {data.sheet_length_mm}×{data.sheet_width_mm} 原板，請檢查尺寸或改用較大板型"
+        if unplaced else "全部零件已排入"
+    )
     return {
         "success": True,
+        "message": message,
         "job_id": str(job.id),
+        "status": job.status,
         "sheets_used": result["sheets_used"],
         "utilization_rate": f"{result['utilization_rate']*100:.1f}%",
         "waste_area_mm2": result["waste_area_mm2"],
+        "placed_count": result["placed_count"],
+        "requested_count": result["requested_count"],
+        "unplaced": unplaced,
         "placements": result["placements"],
         "remnants": result["remnants"],
     }

@@ -5,7 +5,7 @@
 import json
 from uuid import UUID
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
 from app.models.portfolio import PortfolioCase
+from app.rate_limit import limiter
 
 router = APIRouter(prefix="/api/v1/portfolio", tags=["作品展示系統"])
 public_router = APIRouter(prefix="/api/v1/public/portfolio", tags=["官網公開API"])
@@ -98,8 +99,16 @@ async def publish_case(
     return {"success": True, "message": f"作品「{case.title}」已發佈至官網"}
 
 # ── 公開端（官網讀取，無需登入）
+# 依 CLAUDE.md：/api/v1/public/* 必須套 rate limit（v2.1 補上，先前兩個端點都沒有）。
+# 額度刻意放寬：官網是 Next.js Server Component 以 revalidate=60 快取讀取，
+# 所有 SSR 請求都來自同一個前端容器 IP，每個網址每分鐘最多打一次；
+# 120/minute 足夠官網使用，只擋直接對 API 的大量爬取。
+PUBLIC_READ_LIMIT = "120/minute"
+
 @public_router.get("", summary="官網作品列表（公開）")
+@limiter.limit(PUBLIC_READ_LIMIT)
 async def public_list_cases(
+    request: Request,
     industry: Optional[str] = Query(None),
     featured_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
@@ -120,7 +129,8 @@ async def public_list_cases(
     ]}
 
 @public_router.get("/{slug}", summary="官網作品詳情（公開）")
-async def public_get_case(slug: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit(PUBLIC_READ_LIMIT)
+async def public_get_case(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     q = select(PortfolioCase).where(PortfolioCase.slug == slug,
                                      PortfolioCase.published_at.isnot(None))
     result = await db.execute(q)

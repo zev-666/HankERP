@@ -18,6 +18,28 @@ services:
       timeout: 5s
       retries: 5
 
+  # 資料庫自動備份（v2.1）：與 db 同映像，pg_dump 版本一致。
+  # 預設每天一次、保留 14 天，備份檔寫到主機的 ./backups（不在 git 內）。
+  # 手動備份／還原步驟見 DEPLOYMENT.md「資料庫備份」。
+  db-backup:
+    image: postgres:15-alpine
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: erp_user
+      PGPASSWORD: ${DB_PASSWORD:-erp_pass_2025}
+      PGDATABASE: acrylic_erp
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./infra/backup:/scripts:ro
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "/scripts/backup.sh"]
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     # 資安：不對外曝露6379 port。Redis預設無身份驗證機制，直接對外曝露是已知的
