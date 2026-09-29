@@ -656,16 +656,25 @@ function nest(parts, sheetL, sheetW, kerf, trim, maxSheets, remPref, minRem){
         //   細到用不上的碎屑（< minRem）不列入任何一邊
         let bandArea = 0, scraps = 0, cutCount = 0;
         r.sheets.forEach((sh, si) => {
-          const rest = packW - sh.usedH - (sh.strips.length ? kerf : 0);
+          const stripsN = sh.strips.length;
+          const restW = packW - sh.usedH - (stripsN ? kerf : 0);
           // 最後一張板的空白是「還沒用到的板」，不是刻意留下的整條剩料，不列入評分，
           // 否則演算法會被「最後一張半空的板」騙走，選出一堆碎料的排法。
           const isTail = r.sheets.length > 1 && si === r.sheets.length - 1;
-          if(!isTail && rest >= minRem && packL >= minRem) bandArea += rest * packL;
-          // 真實刀數：開條刀（最後一條若沒剩料就不用切）＋ 條內分件刀
-          cutCount += sh.strips.length - ((packW - sh.usedH - (sh.strips.length ? kerf : 0)) > kerf + 0.5 ? 0 : 1);
-          sh.strips.forEach(st => {
+          if(!isTail && restW >= minRem && packL >= minRem) bandArea += restW * packL;
+          // 真實刀數：跟畫刀序表 cutList() 同一套判斷邏輯就地算，不呼叫 cutList()
+          // 組完整物件（大單會很慢），也不用另外的函式重跑一次 strips／items，
+          // 確保評分刀數跟畫出來的刀序表一致（2026-09-23 發現的落差：22 vs 23）。
+          if(trim > 0) cutCount += 2;   // 修邊：每張板兩刀基準邊，跟 cutList() 一致
+          sh.strips.forEach((st, i) => {
+            const stripRest = packW - (st.y + st.h);
+            if(i !== stripsN - 1 || stripRest > kerf + 0.5) cutCount++;   // 開條刀
+            const itemsN = st.items.length;
+            st.items.forEach((it, j) => {
+              const itemRest = packL - (it.x + it.w);
+              if(j !== itemsN - 1 || itemRest > kerf + 0.5) cutCount++;  // 分件刀
+            });
             const tail = packL - st.x - (st.items.length ? kerf : 0);
-            cutCount += st.items.length - (tail > kerf + 0.5 ? 0 : 1);
             if(tail >= minRem && st.h >= minRem) scraps++;
           });
         });
@@ -773,7 +782,7 @@ function loadDemo(){
   addRow("骨仔3", 600, 25, 2);
 }
 function syncChips(){
-  $("#chip-sheet").textContent = `${fmt(numVal("sL",2000,1))} × ${fmt(numVal("sW",1000,1))} mm`;
+  $("#chip-sheet").textContent = `${fmt(numVal("sL",1915,1))} × ${fmt(numVal("sW",1315,1))} mm`;
   $("#chip-kerf").textContent  = `刀縫 ${numVal("kerf",3,0,30)} mm`;
 }
 
@@ -827,7 +836,7 @@ function drawSheet(sheet, res, idx, minRem){
 function run(){
   syncChips();
   const parts = readParts();
-  const SL = numVal("sL",2000,1), SW = numVal("sW",1000,1);
+  const SL = numVal("sL",1915,1), SW = numVal("sW",1315,1);
   const kerf = numVal("kerf",3,0,30), trim = numVal("trim",0,0,200);
   const minRem = numVal("minRem",50,0);
   const remPref = $("#remPref").value;
@@ -960,7 +969,7 @@ function run(){
     h += `</div></section>`;
   });
 
-  h += `<p class="foot">等級：A ≥ 300×300 mm（一才以上）· B ≥ 150×150 mm · C 其餘。<strong>實線</strong>＝開條刀（整刀切穿），<strong>虛線</strong>＝條內分件刀。策略：<code>${esc(res.strategy)}</code>（已自動比較 18 種排法）</p>`;
+  h += `<p class="foot">等級：A ≥ 300×300 mm（一才以上）· B ≥ 150×150 mm · C 其餘。<strong>實線</strong>＝開條刀（整刀切穿），<strong>虛線</strong>＝條內分件刀。策略：<code>${esc(res.strategy)}</code>（已自動比較開條方向、排序、擺向與填法的所有組合）</p>`;
 
   $("#out").innerHTML = h;
   wireTabs();

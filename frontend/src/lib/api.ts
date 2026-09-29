@@ -69,6 +69,7 @@ class ApiClient {
   getLowStock() { return this.get<any>("/api/v1/inventory/alerts/low-stock"); }
   // Nesting
   calculateNesting(d: any) { return this.post<any>("/api/v1/nesting/calculate", d); }
+  compareNestingPresets(d: any) { return this.post<any>("/api/v1/nesting/compare-presets", d); }
   getNestingJobs() { return this.get<any>("/api/v1/nesting/jobs"); }
   getNestingJob(id: string) { return this.get<any>(`/api/v1/nesting/jobs/${id}`); }
   // Quotations

@@ -1,45 +1,49 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
 from app.models.nesting import NestingJob, NestingPart
 from app.modules.nesting.schemas import (
-    NestingRequest, NestingResultOut, PresetCompareRequest, PresetCompareResponse,
+    NestingRequest, PresetCompareRequest, PresetCompareResponse,
 )
-from app.ai.nesting_bfd import BFDNestingEngine, Part as NestPart, compare_all_presets
+from app.modules.nesting.service import ENGINE_VERSION, compare_presets, run_nesting
 from sqlalchemy import select
-import uuid as uuid_mod
 
 router = APIRouter(prefix="/api/v1/nesting", tags=["裁切最佳化"])
 
 @router.post("/compare-presets", response_model=PresetCompareResponse, summary="比較9種板型，找出最省片數的方案")
-async def compare_presets(
+async def compare_presets_endpoint(
     data: PresetCompareRequest,
     current_user: User = Depends(get_current_user),
 ):
-    nest_parts = [
-        NestPart(
-            id=p.label,
-            label=p.label,
-            length=float(p.length_mm),
-            width=float(p.width_mm),
-            quantity=p.quantity,
-            can_rotate=p.can_rotate,
-        )
-        for p in data.parts
-    ]
-    result = compare_all_presets(nest_parts, kerf=float(data.kerf_mm))
-    return result
+    return compare_presets(
+        data.parts, data.kerf_mm, data.trim_mm, data.rem_pref, data.min_remnant_mm,
+    )
 
-@router.post("/calculate", summary="執行裁切最佳化計算")
+@router.post("/calculate", summary="執行裁切最佳化計算（開條引擎，含刀序）")
 async def calculate_nesting(
     data: NestingRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 建立Job記錄
+    """
+    v2.3：排版核心由 Guillotine BFD 換成開條引擎（`app/ai/nesting_strip.py`）。
+
+    舊引擎的排版品質明顯不足——同一組輸入 460×160×100 要 9 張板（利用率 32.5%），
+    開條引擎只要 4 張（73.1%）。新引擎另外產出條帶結構與完整刀序（Level 3），
+    這是現場真正要拿去裁板機用的東西。
+
+    `result_json.engine` 記錄演算法版本；舊紀錄沒有這個鍵就是 v2.2 以前的 BFD 結果。
+    """
+    result = run_nesting(
+        data.parts, data.sheet_length_mm, data.sheet_width_mm, data.kerf_mm,
+        data.trim_mm, data.rem_pref, data.min_remnant_mm, data.max_sheets,
+    )
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+
     job = NestingJob(
         tenant_id=current_user.tenant_id,
         wo_id=data.wo_id,
@@ -47,14 +51,14 @@ async def calculate_nesting(
         sheet_length_mm=data.sheet_length_mm,
         sheet_width_mm=data.sheet_width_mm,
         kerf_mm=data.kerf_mm,
+        algorithm_version=ENGINE_VERSION,
         status="running",
     )
     db.add(job)
     await db.flush()
 
-    # 儲存零件清單
     for p in data.parts:
-        part = NestingPart(
+        db.add(NestingPart(
             nesting_job_id=job.id,
             bom_item_id=p.bom_item_id,
             label=p.label,
@@ -62,29 +66,9 @@ async def calculate_nesting(
             part_width_mm=p.width_mm,
             quantity=p.quantity,
             can_rotate=p.can_rotate,
-        )
-        db.add(part)
+        ))
 
-    # 執行BFD演算法（同步，輕量任務直接執行）
-    engine = BFDNestingEngine(
-        sheet_length=float(data.sheet_length_mm),
-        sheet_width=float(data.sheet_width_mm),
-        kerf=float(data.kerf_mm),
-    )
-    nest_parts = [
-        NestPart(
-            id=p.label,
-            label=p.label,
-            length=float(p.length_mm),
-            width=float(p.width_mm),
-            quantity=p.quantity,
-            can_rotate=p.can_rotate,
-        )
-        for p in data.parts
-    ]
-    result = engine.nest(nest_parts)
-
-    # 儲存結果（有零件排不進去時標 partial，不再當成完整完成）
+    # 有零件排不進去時標 partial，不進 KPI（v2.1 起的規則，v2.3 維持）
     unplaced = result["unplaced"]
     job.status = "partial" if unplaced else "completed"
     job.sheets_used = result["sheets_used"]
@@ -94,23 +78,21 @@ async def calculate_nesting(
 
     await db.flush()
 
-    message = (
-        f"有 {len(unplaced)} 件零件排不進 {data.sheet_length_mm}×{data.sheet_width_mm} 原板，請檢查尺寸或改用較大板型"
-        if unplaced else "全部零件已排入"
-    )
+    if unplaced:
+        message = (f"有 {len(unplaced)} 件零件排不進 "
+                   f"{data.sheet_length_mm}×{data.sheet_width_mm} 原板，"
+                   f"請檢查尺寸或改用較大板型")
+    else:
+        message = (f"全部 {result['requested_count']} 件已排入，"
+                   f"共 {result['sheets_used']} 張板、{result['total_cuts']} 刀")
+
     return {
         "success": True,
         "message": message,
         "job_id": str(job.id),
         "status": job.status,
-        "sheets_used": result["sheets_used"],
-        "utilization_rate": f"{result['utilization_rate']*100:.1f}%",
-        "waste_area_mm2": result["waste_area_mm2"],
-        "placed_count": result["placed_count"],
-        "requested_count": result["requested_count"],
-        "unplaced": unplaced,
-        "placements": result["placements"],
-        "remnants": result["remnants"],
+        "utilization_rate_pct": f"{result['utilization_rate'] * 100:.1f}%",
+        **result,
     }
 
 @router.get("/jobs/{job_id}", summary="查詢排版結果")

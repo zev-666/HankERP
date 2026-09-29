@@ -12,10 +12,12 @@ class NestingJob(Base):
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"))
     wo_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True)
     material_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"))
-    sheet_length_mm: Mapped[Decimal] = mapped_column(Numeric(8,2), default=Decimal("2000"))
-    sheet_width_mm: Mapped[Decimal] = mapped_column(Numeric(8,2), default=Decimal("1000"))
+    # v2.3：預設板改為 S 1915×1315（本廠標準板）。2000×1000 是舊文件的錯誤值。
+    sheet_length_mm: Mapped[Decimal] = mapped_column(Numeric(8,2), default=Decimal("1915"))
+    sheet_width_mm: Mapped[Decimal] = mapped_column(Numeric(8,2), default=Decimal("1315"))
     kerf_mm: Mapped[Decimal] = mapped_column(Numeric(4,1), default=Decimal("3"))
-    algorithm_version: Mapped[str] = mapped_column(String(20), default="bfd_v1")
+    # v2.3：排版核心換成開條引擎，版本標記改為 strip-v1
+    algorithm_version: Mapped[str] = mapped_column(String(20), default="strip_v1")
     utilization_rate: Mapped[Decimal] = mapped_column(Numeric(5,4), nullable=True)
     total_waste_area_mm2: Mapped[Decimal] = mapped_column(Numeric(14,2), nullable=True)
     sheets_used: Mapped[int] = mapped_column(Integer, nullable=True)

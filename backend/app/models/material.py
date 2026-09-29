@@ -17,8 +17,11 @@ class Material(Base):
     # 壓克力專屬
     thickness_mm: Mapped[Decimal] = mapped_column(Numeric(5,2), nullable=True)
     color: Mapped[str] = mapped_column(String(100), nullable=True)   # '透明','白色','黑色','霧面'
-    standard_length_mm: Mapped[Decimal] = mapped_column(Numeric(8,2), default=Decimal("2000"))
-    standard_width_mm: Mapped[Decimal] = mapped_column(Numeric(8,2), default=Decimal("1000"))
+    # v2.3：預設板改為 S 1915×1315（本廠標準板，使用者 2026-09-20 更正）。
+    # 注意：init migration 沒有為這兩欄設 server_default，因此改這裡不需要 migration；
+    # 既有 materials 資料列的值是實際資料，不會被動到（2000×1000 本來就是 9 種板型之一）。
+    standard_length_mm: Mapped[Decimal] = mapped_column(Numeric(8,2), default=Decimal("1915"))
+    standard_width_mm: Mapped[Decimal] = mapped_column(Numeric(8,2), default=Decimal("1315"))
     # 通用
     unit: Mapped[str] = mapped_column(String(20), default="片")
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(12,4), default=Decimal("0"))

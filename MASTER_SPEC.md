@@ -803,7 +803,34 @@ frontend/
 
 ## 六、壓克力裁切最佳化演算法（核心）
 
-### Phase 1: Best-Fit Decreasing (BFD)
+### 裁切排版引擎（v2.3 起：開條 / 二階段 guillotine）
+
+> **v2.3 變更**：排版核心由下方的 Guillotine BFD 換成開條引擎
+> `backend/app/ai/nesting_strip.py`，由 `tools/cutting-calculator/cutplan.html`
+> 逐函式移植。`/api/v1/nesting/calculate` 與 `/compare-presets` 都已切換。
+>
+> **為什麼換**：BFD 的排版品質明顯不足。同輸入實測
+> 460×160×100 需 9 張（利用率 32.5%），開條引擎 4 張（73.1%）；
+> 460×160×32 需 3 張，開條引擎 1 張；6 種尺寸的示範訂單 2 張 vs 1 張。
+> 根因是 `_guillotine_split()` 產生下方剩餘空間時寬度用了零件的長而非原矩形的寬。
+>
+> **為什麼是開條**：真實裁板機只能整刀切穿，所以版面一律是「先開條、再條內分件」。
+> 這樣排出來的結果天生帶有刀序，是 Level 3（裁切順序）的基礎。
+>
+> **方案取捨順序**（使用者 2026-09-23 確認）：
+> 全部排入 → 板數少 → 利用率高 → 整條剩料大 → 刀數少 → 零星碎料少。
+>
+> **回歸方法**：Node 執行 `cutplan.html` 抽出的 JS 引擎，與 Python 版同輸入交叉比對，
+> 逐件座標、逐刀位置、逐塊剩料比對；基準存於
+> `backend/tests/fixtures/nesting_strip_regression.json`，測試在 `tests/test_nesting_strip.py`。
+>
+> **與參考版的一處刻意偏離**：9 種板型比較（`compare_presets`）改以「總才數」為第一排序鍵。
+> 參考版在板數相同時以整條剩料為先，實測會把 M 板（54.51 才）推薦成比 S 板（27.98 才）更省，
+> 與它自己「總才數才是實際要買的材料量」的註腳矛盾。詳見 `nesting/service.py` 的說明。
+
+以下保留舊 BFD 引擎的設計說明，作為歷史對照（程式仍在 repo 內，未刪除）。
+
+### Phase 1: Best-Fit Decreasing (BFD)（v2.2 以前）
 ```python
 # app/ai/nesting_bfd.py
 from dataclasses import dataclass

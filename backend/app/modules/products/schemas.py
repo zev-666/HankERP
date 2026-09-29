@@ -67,8 +67,9 @@ class MaterialCreate(BaseModel):
     material_type: str   # acrylic/wood/metal/led/paint/hardware
     thickness_mm: Optional[Decimal] = None
     color: Optional[str] = None
-    standard_length_mm: Decimal = Decimal("2000")
-    standard_width_mm: Decimal = Decimal("1000")
+    # v2.3：預設板改為 S 1915×1315（本廠標準板）
+    standard_length_mm: Decimal = Decimal("1915")
+    standard_width_mm: Decimal = Decimal("1315")
     unit: str = "片"
     unit_cost: Decimal = Decimal("0")
     cost_per_cai: Optional[Decimal] = None
