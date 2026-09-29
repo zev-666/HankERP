@@ -56,6 +56,9 @@ services:
       # 資安：SECRET_KEY從根目錄.env讀取，不寫死在此檔案中。
       # 部署前請在專案根目錄建立.env，內容包含：SECRET_KEY=<用secrets.token_urlsafe(32)產生的隨機值>
       SECRET_KEY: "${SECRET_KEY:?請在根目錄.env設定SECRET_KEY（見.env.example說明）}"
+      # 資安（v2.2）：種子管理員密碼一律由 .env 提供，不再有寫死的預設值。
+      # 本 repo 為公開儲存庫，先前寫死的預設密碼等同公開在 GitHub 上。
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?請在根目錄.env設定SEED_ADMIN_PASSWORD（見.env.example說明）}"
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
       TENANT_ID: default

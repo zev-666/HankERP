@@ -31,6 +31,11 @@ cp frontend/.env.local.example frontend/.env.local
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 # 把印出的值貼進 .env 的 SECRET_KEY= 後面
 
+# 1.2 ⚠️ 必做（v2.2 起）：設定管理員密碼。沒設 docker compose 會拒絕啟動，
+#     seed_data.py 也會拒絕執行。本 repo 為公開儲存庫，因此不再有寫死的預設密碼。
+python3 -c "import secrets; print(secrets.token_urlsafe(24))"
+# 把印出的值貼進 .env 的 SEED_ADMIN_PASSWORD= 後面
+
 # 2. 啟動全部服務（PostgreSQL + Redis + Backend + Celery + Frontend）
 docker compose up -d --build
 
@@ -38,6 +43,7 @@ docker compose up -d --build
 docker compose exec backend alembic upgrade head
 
 # 4. 建立種子資料（預設租戶、9種角色、管理員帳號）※ 可重複執行，不會重複建立
+#    v2.2 起重複執行會同步角色權限（新增缺少的角色、更新既有角色的 permissions）
 docker compose exec backend python scripts/seed_data.py
 ```
 
@@ -165,6 +171,12 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 若 GitHub 儲存庫設為 Public，任何人都能看到你的成本結構。
 建議改為 Private：Settings → General → Danger Zone → Change repository visibility。
 
+> **2026-09-29 實際狀況**：儲存庫目前仍是 **Public**。在改為 Private 之前，
+> 上述成本結構是公開的；v2.2 之前寫死在 `scripts/seed_data.py` 與
+> `scripts/verify_e2e.py` 裡的管理員預設密碼也是公開的。
+> v2.2 已把密碼改為環境變數，但**曾經公開過的那組密碼必須視為已外洩**——
+> 正式站若仍在使用，請立即於後台更換。
+
 ---
 
 ## 版本紀錄
@@ -176,6 +188,58 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > v1.0–v1.9 的交付物為 `acrylic-erp-verified.zip`；**v2.0 起改以 git 儲存庫
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
+
+### v2.2（2026-09-29）— RBAC 執行層、關閉公開自助註冊、移除寫死密碼
+
+**背景**：依 2026-09-19 決定的工作順序，本輪是「先穩固現有系統」的第 ③ 項 RBAC。
+動工前先驗收 v2.1：CI #6（commit `3b8665d`）綠燈，v2.1 的三項修正取得執行期證據。
+
+#### 改了什麼、為什麼
+
+| # | 改動 | 為什麼 |
+|---|---|---|
+| 1 | 新增 `backend/app/auth/permissions.py`，以 app 層級相依 `enforce_permissions` 強制檢查權限 | v2.1 為止全後端**沒有任何一支端點檢查 `roles.permissions`**（`grep` 只命中 `models/user.py` 的欄位定義），任何登入帳號都能呼叫全部 68 支業務端點，9 種角色只是資料庫裡的一筆資料 |
+| 2 | `POST /api/v1/auth/register` 由公開改為需 `admin:write`，並改用呼叫者的 `tenant_id` | 這支**原本是公開端點且接受前端傳入 `role_name`**，任何人都能把自己註冊成 admin，RBAC 做得再好也會被它繞過。原本還用 `select(Tenant).limit(1)` 隨便抓第一個租戶，多租戶下會把帳號建到別人家 |
+| 3 | `seed_data.py` 的 `ROLES` 依新權限矩陣重寫，並改為每次執行都同步既有角色的權限 | 舊的 idempotent 做法是「租戶已存在就整段跳過」，既有資料庫的角色權限會永遠停在第一次建立時的版本；RBAC 上線後這等於權限矩陣改了卻沒生效 |
+| 4 | 管理員密碼改由 `SEED_ADMIN_PASSWORD` 環境變數提供，`verify_e2e.py` 同步改讀環境變數 | 密碼原本寫死在原始碼裡，**而本 repo 是 Public 的**——等同把正式站的管理員密碼公開在 GitHub |
+| 5 | 登入回應的 `role` 改為可為 `null`（前端型別同步） | 帳號沒有角色時原本回傳 `"viewer"`，但資料庫裡從來沒有這個角色 |
+| 6 | `InventoryBalanceOut` 補上 `product_id`、`material_id` 改為 Optional | v2.0 已讓 FG 倉用 `product_id` 且 `material_id` 可空，這個 schema 沒跟著改。目前 `/balance` 沒設 `response_model` 所以還沒爆，但只要有人補上就會讓 FG 倉每一筆都 500 |
+| 7 | `verify_e2e.py` 在狀態碼不如預期時就地印出伺服器回應 | 先前只記進 `FAILS`，而腳本往往在 `sys.exit` 之前就先 `KeyError` 炸掉（例如讀 `done['message']`），真正的錯誤原因整個被吞掉——CI #5、#6 兩次失敗都因此查不到原因 |
+| 8 | `/auth/register` 限流由 10/hour 放寬為 60/hour | 原本的低額度是為了拖慢匿名濫用；現在只有管理員叫得動，一次匯入一批員工帳號是正常操作 |
+
+#### 怎麼驗證
+
+- `backend/tests/test_permissions.py`（純資料檢查，不需資料庫）：
+  權限表涵蓋 app 上**每一支**已註冊路由且無陳舊規則、端點分類數（公開 7／僅需登入 1／受管控 61）、
+  9 種角色的可存取端點數（61／31／30／21／21／18／11／5／12）、35 條邊界案例、
+  空權限與 `None` 權限皆為 0 支可存取。
+- `backend/scripts/verify_rbac.py`（真實 HTTP）：建立 9 個角色帳號逐一登入撞牆，
+  並驗證未登入無法呼叫 `/auth/register`。**這支在 v2.2 之前的程式碼上必定失敗**，
+  因為當時所有「應為 403」的案例都會回 200——這就是它抓得到問題的證明。
+- CI 新增 `verify_rbac.py` 步驟；端到端驗證改為**連跑三次**（原因見下）。
+
+#### 本輪確認、但未修的問題
+
+**`verify_e2e.py` 有間歇性失敗，根因尚未查明。** CI #5（`e1898f5`）與 CI #6（`3b8665d`）
+都失敗在步驟 11「完工入庫」，但症狀不同：#6 是 `complete` 回 200、下一個 request 卻查不到
+FG 庫存；#5 是兩道工序都報工完成了，`complete` 仍回 400。同一個 commit 重跑即綠，
+本機 Docker（PostgreSQL 15）連續執行也重現不出來。
+
+一度推測是 `get_db` 在 `yield` 之後才 commit 造成的 race，但**這個推測不成立**：
+FastAPI 自 0.106 起，yield 相依的收尾就在回應送出之前執行，本專案用的是 0.135。
+在沒有確切證據之前不改動 session 管理，本輪只做兩件事提高下次抓到的機率：
+CI 的端到端驗證連跑三次，以及讓 `verify_e2e.py` 不再吞掉伺服器的錯誤訊息。
+
+#### v2.2 實測數字（2026-09-29，本機 Docker 真實環境）
+
+| 項目 | 數值 | 量法 |
+|---|---|---|
+| HTTP 端點 | **69**（業務 68、13 個模組） | 真實 `/openapi.json` |
+| 業務資料表 | **30**（＋`alembic_version` 共 31） | `information_schema.tables` |
+| 公開端點限流 | 打 125 次得 **200×120 + 429×5** | `curl` 實打，確認 120/minute |
+| 權限表 | 69 支（公開 7／僅需登入 1／受管控 61） | `test_permissions.py` |
+
+v2.2 **未新增或移除任何端點**，只是把既有端點掛上權限檢查。
 
 ### v2.1（2026-09-23）— 穩固系統第一輪：利用率修正、資料庫備份、公開端點限流
 

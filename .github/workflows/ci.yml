@@ -60,6 +60,12 @@ jobs:
       - name: 安裝依賴
         run: pip install -r requirements.txt -r requirements-dev.txt
 
+      # v2.2 資安：管理員密碼不再寫死在原始碼或此檔案裡（本 repo 為公開儲存庫）。
+      # 每次 CI 隨機產生一組，只存在於本次 run 的環境變數中。
+      - name: 產生本次 CI 專用的管理員密碼
+        run: |
+          echo "SEED_ADMIN_PASSWORD=$(python -c 'import secrets; print(secrets.token_urlsafe(24))')" >> "$GITHUB_ENV"
+
       - name: 資料庫 migration
         run: alembic upgrade head
 
@@ -81,8 +87,24 @@ jobs:
           done
           curl -sf http://127.0.0.1:8000/health
 
-      - name: 端到端驗證（詢價 / 發料 / 完工入庫）
-        run: API_BASE=http://127.0.0.1:8000 python scripts/verify_e2e.py
+      # v2.2：連跑三次。這支在 CI #5 與 #6 出現過兩種不同的間歇性失敗
+      # （完工入庫回 200 但查不到 FG 庫存；工序都完成了卻說尚有工序未完成），
+      # 同一個 commit 重跑卻是綠的，本機連續執行也重現不出來。
+      # 根因尚未查明，連跑三次是為了提高撞到的機率；配合 verify_e2e.py
+      # 已改為在狀態碼不如預期時就地印出伺服器回應，下次再抖就會留下線索。
+      - name: 端到端驗證（詢價 / 發料 / 完工入庫）× 3
+        run: |
+          for i in 1 2 3; do
+            echo "─────────── 第 $i 次 ───────────"
+            API_BASE=http://127.0.0.1:8000 python scripts/verify_e2e.py
+          done
+
+      # v2.2：RBAC 執行層。在此之前全後端沒有任何端點檢查角色權限，
+      # 任何登入帳號都能呼叫全部 68 支業務端點；/auth/register 更是公開
+      # 且接受前端指定 role_name，任何人都能把自己註冊成 admin。
+      # 這支在 v2.2 之前的程式碼上必定失敗。
+      - name: RBAC 權限邊界驗證（9 種角色真實 HTTP）
+        run: API_BASE=http://127.0.0.1:8000 python scripts/verify_rbac.py
 
       - name: 記錄實際端點數（避免文件數字再次過期）
         run: |

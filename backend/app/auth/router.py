@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, EmailStr, field_validator
 from app.database import get_db
-from app.models.user import User, Role, Tenant
+from app.models.user import User, Role
 from app.auth.security import verify_password, create_access_token, get_password_hash
 from app.auth.dependencies import get_current_user
 from app.config import settings
@@ -33,13 +33,19 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user_id: str
     user_name: str
-    role: str
+    # v2.2：改為可為 None。先前帳號沒有角色時會回傳 "viewer"，
+    # 但資料庫裡從來沒有這個角色，前端拿到的是一個不存在的東西。
+    # 現在沒有角色就誠實回 null，由前端顯示「未指定角色」。
+    role: Optional[str] = None
 
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    role_name: str = "sales"  # 預設角色，正式邀請流程應由管理員指定
+    # v2.2：本端點已改為僅限管理員呼叫（見 permissions.PERMISSION_MAP），
+    # 因此由呼叫者指定角色是合理的；先前這支是公開端點又接受 role_name，
+    # 任何人都能把自己註冊成 admin。
+    role_name: str
 
     @field_validator("password")
     @classmethod
@@ -76,30 +82,43 @@ async def login(request: Request, request_body: LoginRequest, db: AsyncSession =
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="帳號或密碼錯誤")
 
     token = create_access_token(data={"sub": str(user.id)})
-    role_name = user.role.name if user.role else "viewer"
+    role_name = user.role.name if user.role else None
     return TokenResponse(access_token=token, user_id=str(user.id), user_name=user.full_name or user.email, role=role_name)
 
-@router.post("/register", summary="註冊新使用者（需現有租戶與角色已存在）")
-@limiter.limit("10/hour")
-async def register(request: Request, request_body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+@router.post("/register", summary="建立新使用者帳號（僅限系統管理員）")
+# v2.2：原為 10/hour。當時這是匿名端點，限流是用來拖慢自助註冊濫用；
+# 現在只有管理員叫得動（未授權的請求在相依層就被擋下，不會計入額度），
+# 一次匯入一批員工帳號是正常操作，10 次太低。
+@limiter.limit("60/hour")
+async def register(
+    request: Request,
+    request_body: RegisterRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    v2.2：本端點由「公開自助註冊」改為「管理員建立帳號」。
+
+    權限由 permissions.PERMISSION_MAP 的 ("POST", "/api/v1/auth/register")
+    → admin:write 把關。新帳號一律建在呼叫者所屬的租戶底下，
+    不再用 `select(Tenant).limit(1)` 隨便抓第一個租戶——那在多租戶
+    情境下會把使用者建到別人的租戶裡。
+    """
     existing = await db.execute(select(User).where(User.email == request_body.email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="此Email已被註冊")
 
-    tenant_result = await db.execute(select(Tenant).limit(1))
-    tenant = tenant_result.scalar_one_or_none()
-    if not tenant:
-        raise HTTPException(status_code=400, detail="尚未建立租戶，請先執行系統初始化")
+    tenant_id = current_user.tenant_id
 
     role_result = await db.execute(
-        select(Role).where(Role.tenant_id == tenant.id, Role.name == request_body.role_name)
+        select(Role).where(Role.tenant_id == tenant_id, Role.name == request_body.role_name)
     )
     role = role_result.scalar_one_or_none()
     if not role:
         raise HTTPException(status_code=400, detail=f"找不到角色: {request_body.role_name}")
 
     new_user = User(
-        tenant_id=tenant.id,
+        tenant_id=tenant_id,
         email=request_body.email,
         hashed_password=get_password_hash(request_body.password),
         full_name=request_body.full_name,

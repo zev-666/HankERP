@@ -53,7 +53,7 @@ class ApiClient {
 
   // Auth
   login(email: string, password: string) {
-    return this.post<{ access_token: string; token_type: string; user_id: string; user_name: string; role: string }>("/api/v1/auth/login", { email, password });
+    return this.post<{ access_token: string; token_type: string; user_id: string; user_name: string; role: string | null }>("/api/v1/auth/login", { email, password });
   }
   // Dashboard
   getDashboard() { return this.get<any>("/api/v1/analytics/dashboard"); }

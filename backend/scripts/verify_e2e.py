@@ -24,6 +24,12 @@ import os
 import uuid as _uuid
 BASE = os.environ.get("API_BASE", "http://127.0.0.1:8000").rstrip("/")
 RUN = _uuid.uuid4().hex[:6]  # 每次執行用不同代號，避免 unique 欄位撞到前一輪殘留資料
+# v2.2 資安：不再把管理員密碼寫死在原始碼（本 repo 為公開儲存庫）。
+ADMIN_EMAIL = os.environ.get("E2E_ADMIN_EMAIL", "admin@guishan-acrylic.com")
+ADMIN_PASSWORD = os.environ.get("E2E_ADMIN_PASSWORD") or os.environ.get("SEED_ADMIN_PASSWORD")
+if not ADMIN_PASSWORD:
+    print("✗ 未設定 E2E_ADMIN_PASSWORD（或 SEED_ADMIN_PASSWORD），無法登入。")
+    sys.exit(1)
 TOKEN = None
 FAILS = []
 
@@ -50,13 +56,19 @@ def call(method, path, body=None, auth=True, expect=200):
     if not ok:
         FAILS.append(f"{method} {path} -> {status} (expected {expect}): {payload}")
     print(f"[{mark}] {method} {path} -> {status}")
+    # v2.2：狀態碼不如預期時就地把伺服器的錯誤內容印出來。
+    # 先前腳本只記進 FAILS，而後續程式碼往往在 sys.exit 之前就先
+    # KeyError（例如讀 done['message']）炸掉，真正的錯誤原因整個被吞掉——
+    # CI 上連續兩次失敗都因此看不到伺服器說了什麼。
+    if not ok:
+        print(f"       伺服器回應：{payload}")
     return payload
 
 
 print("=" * 70)
 print("1. 登入")
 r = call("POST", "/api/v1/auth/login",
-         {"email": "admin@guishan-acrylic.com", "password": "ChangeMe123!"}, auth=False)
+         {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, auth=False)
 TOKEN = r["access_token"]
 
 print("\n2. 官網詢價（公開端點，無需登入）")

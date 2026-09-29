@@ -1130,24 +1130,69 @@ class QuoteEngine:
 
 ## 九、RBAC 權限矩陣
 
-| 角色 | 報價 | BOM | 庫存 | 採購 | 工單/MES | 設備 | 成本 | 管理 |
-|------|------|-----|------|------|----------|------|------|------|
-| 系統管理員 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 廠長/總經理 | 讀 | 讀 | 讀 | 讀 | 讀 | 讀 | ✅ | 讀 |
-| 業務/報價 | ✅ | 讀 | 讀 | ✗ | ✗ | ✗ | ✗ | ✗ |
-| 工程師 | ✗ | ✅ | 讀 | ✗ | ✗ | ✗ | ✗ | ✗ |
-| 生管 | ✗ | 讀 | 讀 | 讀 | ✅ | 讀 | ✗ | ✗ |
-| 倉管 | ✗ | ✗ | ✅ | 讀 | 讀 | ✗ | ✗ | ✗ |
-| 採購 | ✗ | 讀 | 讀 | ✅ | ✗ | ✗ | ✗ | ✗ |
-| 現場作業員 | ✗ | ✗ | ✗ | ✗ | MES報工 | ✗ | ✗ | ✗ |
-| 品管 | ✗ | ✗ | 讀 | ✗ | 品質回報 | ✗ | ✗ | ✗ |
+> **v2.2 重寫。** 先前的矩陣只涵蓋 8 個欄位，缺了裁切、客戶 CRM、詢價、作品展示
+> 四個模組（共 21 支端點），而且與 `scripts/seed_data.py` 實際建立的權限不一致
+> （例如規格書說業務可讀 BOM 與庫存，seed 沒給）。本表重寫後涵蓋全部 12 個資源。
+>
+> **這張表有三個副本，改任一處都必須同步另外兩處：**
+> 1. 本表（給人看的規格）
+> 2. `backend/scripts/seed_data.py` 的 `ROLES`（寫進資料庫的權限）
+> 3. `backend/app/auth/permissions.py` 的 `PERMISSION_MAP`（端點對應的權限需求）
+>
+> 一致性由 `backend/tests/test_permissions.py` 在 CI 驗證，
+> 實際是否生效由 `backend/scripts/verify_rbac.py` 以真實 HTTP request 驗證。
 
-> **實作對照（v2.0 修正）**：本表規劃 9 種角色，但 `backend/scripts/seed_data.py`
-> 自 v1.0 起只建立 8 種，**品管（qc）角色從未進過資料庫**——規格書與實作長期不一致，
-> 且歷來驗證都只檢查「8 種角色是否正確建立」，沒有回頭核對「8」是否等於本表的角色數。
-> v2.0 已於 seed 補上 `qc`，實測建立 9 種。
-> 對應的 `Role.name` 依序為：
-> `admin` / `owner` / `sales` / `engineer` / `planner` / `warehouse` / `purchaser` / `operator` / `qc`。
+**動作**：`read` / `write` / `approve` / `export`，加三個特殊動作
+`receive`（採購收貨）、`mes_report`（現場報工）、`quality_report`（品管回報）。
+
+| 角色 | 客戶 | 報價 | 產品/BOM | 裁切 | 庫存 | 採購 | 工單/MES | 設備 | 分析 | 詢價 | 作品 | 帳號管理 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 系統管理員 admin | 全 | 全 | 全 | 全 | 全 | 全 | 全 | 全 | 全 | 全 | 全 | 全 |
+| 廠長/總經理 owner | 讀 | 讀+核 | 讀+核 | 讀 | 讀 | 讀+核 | 讀 | 讀 | 讀+匯出 | 讀 | 讀 | ✗ |
+| 業務/報價 sales | 讀寫 | 讀寫+匯出 | 讀 | 讀 | 讀 | ✗ | 讀 | ✗ | ✗ | 讀寫 | 讀寫 | ✗ |
+| 工程師 engineer | ✗ | 讀 | 讀寫 | 讀寫 | 讀 | ✗ | 讀 | 讀 | ✗ | ✗ | ✗ | ✗ |
+| 生管 planner | ✗ | ✗ | 讀 | 讀寫 | 讀 | 讀 | 讀寫 | 讀 | ✗ | ✗ | ✗ | ✗ |
+| 倉管 warehouse | ✗ | ✗ | 讀 | ✗ | 讀寫 | 讀+收貨 | 讀 | ✗ | ✗ | ✗ | ✗ | ✗ |
+| 採購 purchaser | ✗ | ✗ | 讀 | ✗ | 讀 | 讀寫+收貨 | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| 現場作業員 operator | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | 讀+報工 | ✗ | ✗ | ✗ | ✗ | ✗ |
+| 品管 qc | ✗ | ✗ | 讀 | ✗ | 讀 | 讀+品質回報 | ✗ | 讀 | ✗ | ✗ | ✗ | ✗ |
+
+實際可存取的受權限管控端點數（共 61 支，另有 7 支公開端點與 1 支僅需登入）：
+
+| 角色 | admin | owner | sales | engineer | planner | warehouse | purchaser | operator | qc |
+|---|---|---|---|---|---|---|---|---|---|
+| 端點數 | 61 | 31 | 30 | 21 | 21 | 18 | 11 | 5 | 12 |
+
+### v2.2 相對於舊矩陣的變更與理由
+
+| 變更 | 理由 |
+|---|---|
+| `owner` 由純唯讀改為唯讀＋核准＋匯出 | 舊設定下廠長連採購單都不能簽，所有核准只能用 admin 帳號——實務上會導致共用管理員密碼，RBAC 等於白做 |
+| `sales` 補上 products / inventory / production 讀取 | 業務報價時必須看得到 BOM 與現有庫存，否則報價功能會直接壞掉 |
+| `planner` 補上 `nesting:write` | 排產要算裁切，舊設定只有工程師有 |
+| `operator` 補上 `production:read` | 報工前要先讀得到工單與工序清單，否則作業員連要報哪一道都看不到 |
+| 新增 `equipment` / `inquiries` / `portfolio` / `customers` 資源 | 這四個模組共 21 支端點，舊矩陣完全沒有對應欄位 |
+| 新增 `admin` 資源 | 專門管 `/auth/register` 這類帳號管理端點 |
+| 核准動作獨立為 `approve` | BOM 核准、採購單確認、報價狀態變更都有金額或料帳後果，與一般編輯不同級 |
+
+### 尚待工廠確認
+
+| 端點 | 暫定 | 待確認 |
+|---|---|---|
+| `POST /api/v1/purchase-orders/{po_id}/receive` | 倉管與採購皆可（各持 `purchasing:receive`） | `NEEDS_FACTORY_VERIFICATION`：現場實際由誰點收入帳 |
+| `POST /api/v1/work-orders/{wo_id}/issue-materials` | 生管或倉管皆可 | `NEEDS_FACTORY_VERIFICATION`：發料同時動工單與庫存，實際操作者未確認 |
+
+### 執行層設計
+
+- 權限檢查掛在 `app/auth/permissions.py` 的 `enforce_permissions`，以 FastAPI
+  app 層級相依的形式作用於**每一支**路由。
+- 查表用 `request.scope["route"].path`（FastAPI 解析後的路由模板），
+  不是使用者送進來的原始路徑，因此無法以路徑變形繞過。
+- **預設拒絕**：`PERMISSION_MAP` 查不到的端點一律 403。新增端點若忘記登記，
+  第一次呼叫就會被擋下，而不是默默全開。
+- `User.role_id` 為 NULL 的帳號不得存取任何業務端點。
+- 不需要新的資料表或 migration：`User.role` 本就是 `lazy="joined"`，
+  `Role.permissions` 是既有的 JSON 欄位。
 
 ---
 

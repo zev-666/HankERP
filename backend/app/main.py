@@ -1,9 +1,10 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.rate_limit import limiter
+from app.auth.permissions import enforce_permissions
 from app.auth.router import router as auth_router
 from app.modules.inventory.router import router as inventory_router
 from app.modules.nesting.router import router as nesting_router
@@ -18,6 +19,11 @@ from app.modules.portfolio.router import router as portfolio_router, public_rout
 from app.modules.inquiries.router import router as inquiries_router, public_router as inquiries_public_router
 
 # 資安：正式環境關閉Swagger/ReDoc公開文件，避免完整API結構被公開偵查
+#
+# v2.2 RBAC：enforce_permissions 掛在 app 層級，每一支路由（含之後才註冊的
+# /health）都會先經過它。權限規則集中在 app/auth/permissions.py 的
+# PERMISSION_MAP，採預設拒絕——沒登記的端點一律 403，避免新端點忘記掛權限
+# 卻默默全開。
 app = FastAPI(
     title="壓克力展示架智慧工廠 ERP API",
     version="1.0.0",
@@ -25,6 +31,7 @@ app = FastAPI(
     docs_url=None if settings.is_production else "/docs",
     redoc_url=None if settings.is_production else "/redoc",
     openapi_url=None if settings.is_production else "/openapi.json",
+    dependencies=[Depends(enforce_permissions)],
 )
 
 # 資安：Rate Limiting，依來源IP限制請求頻率，防止暴力破解與資源耗盡攻擊

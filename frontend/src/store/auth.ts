@@ -2,7 +2,9 @@ import { create } from "zustand";
 
 interface AuthState {
   token: string | null;
-  user: { id: string; full_name: string; role: string } | null;
+  // v2.2：role 可為 null。後端先前在帳號沒有角色時會回傳 "viewer"，
+  // 但資料庫裡從來沒有這個角色；現在誠實回 null。
+  user: { id: string; full_name: string; role: string | null } | null;
   setAuth: (token: string, user: AuthState["user"]) => void;
   logout: () => void;
   isAuthenticated: () => boolean;

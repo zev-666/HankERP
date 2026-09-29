@@ -14,8 +14,16 @@
 > **v2.1 變更**：pytest 17 → **21 項**（沙盒以 shim 實際執行全過；正式數字以 CI 為準）。
 > 端點數、資料表數、前端路由數 **v2.1 未變動**（只改既有端點的回傳欄位、新增 1 個純資料 migration）。
 >
-> **本清單共 61 項：✅ 39 項（64%）、⚠️ 11 項、❌ 11 項。**
-> （v2.1：「利用率計算」「板材利用率月報」由 ✅ 降為 ⚠️——舊的 ✅ 是錯的，利用率算法本身有誤；新增「資料庫自動備份」⚠️。）
+> **v2.2 實測基準**（2026-09-29，本機 Docker 真實環境 ＋ GitHub Actions）：
+> 真實 `/openapi.json` 量得 **69 個 HTTP 端點（業務 68、13 個模組）**、
+> `information_schema.tables` 量得 **31 張表（業務 30 ＋ `alembic_version`）**，
+> 兩者與 v2.0 靜態推算一致；公開端點實打 125 次得 **200×120 + 429×5**，確認 120/minute 生效。
+> v2.2 **未新增或移除任何端點**，只是把既有端點掛上權限檢查。
+>
+> **本清單共 61 項：✅ 42 項（69%）、⚠️ 8 項、❌ 11 項。**
+> （v2.2：「利用率計算」「板材利用率月報」「資料庫自動備份」三項在 CI 與本機取得執行期證據，
+> 由 ⚠️ 升為 ✅；「RBAC角色權限系統」原本的 ✅ 只涵蓋「角色有沒有建進資料庫」，
+> 實際上**沒有任何端點檢查權限**，v2.2 補上執行層後才是真的 ✅。）
 >
 > （此三個數字由腳本逐行統計勾選項得出，非目測估算。）
 
@@ -37,9 +45,16 @@
 - [x] ✅ Alembic 資料庫遷移初始化 — 真實PostgreSQL多次驗證，**v2.0 為 30 張業務表
   （＋`alembic_version` 共 31）**，含 v1.1 連線字串 bug 修復與 v2.0 的第二個 migration
 - [x] ✅ FastAPI JWT認證系統 — 全程用真實JWT token（v1.7已改用PyJWT取代有ecdsa漏洞的python-jose）測試全部業務端點（**v2.0 實測 68 個**，v1.7 移除 `setup-admin` 後文件的「62」已過期），認證流程正確
-- [x] ✅ RBAC角色權限系統（**9種角色**）— **v2.0 修正**：MASTER_SPEC 第九章規劃 9 種角色，
-  但 `seed_data.py` 自 v1.0 起只建立 8 種，**品管（qc）從未進過資料庫**。已補上並實測，
-  種子腳本輸出確認建立 9 種（admin/owner/sales/engineer/planner/warehouse/purchaser/operator/qc）
+- [x] ✅ RBAC角色權限系統（**9種角色，v2.2 起有執行層**）— **v2.0 修正**：MASTER_SPEC 第九章規劃 9 種角色，
+  但 `seed_data.py` 自 v1.0 起只建立 8 種，**品管（qc）從未進過資料庫**。已補上並實測建立 9 種。
+  **v2.2 補上真正的執行層**：v2.1 為止，全後端沒有任何一支端點檢查 `roles.permissions`
+  （`grep` 只命中 `models/user.py` 的欄位定義），**任何登入帳號都能呼叫全部 68 支業務端點**，
+  角色只是資料庫裡的一筆資料。v2.2 新增 `app/auth/permissions.py`：權限表集中登記
+  69 支端點（公開 7、僅需登入 1、受管控 61），以 app 層級相依 `enforce_permissions` 強制執行，
+  查表用 FastAPI 路由模板、**預設拒絕**（未登記的端點一律 403）、`role_id` 為 NULL 一律拒絕。
+  驗證：`tests/test_permissions.py` 檢查權限表涵蓋每一支已註冊路由且無陳舊規則、
+  9 種角色可存取端點數（61/31/30/21/21/18/11/5/12）與 35 條邊界案例；
+  `scripts/verify_rbac.py` 以真實 HTTP 建立 9 個角色帳號逐一撞牆，**在 v2.2 之前的程式碼上必定失敗**
 - [x] ⚠️ Next.js + shadcn/ui 登入頁面 — 登入頁面已存在且編譯成功，未逐一核對UI元件細節
 
 ## Phase 2: 官網上線 ✅（v2.0 前後端完成串接）
@@ -120,13 +135,14 @@
   一致的`--concurrency=4`（prefork多進程池）指令**驗證單一任務與4任務並行皆正確完成；
   另修正worker啟動時的`CPendingDeprecationWarning`。惟`calculate_nesting_async`本身
   目前仍是死程式碼，router的`/calculate`端點是同步呼叫，未串接此非同步任務
-- [x] ⚠️ 利用率計算+月報 — **v2.1 更正**：舊版 ✅ 是錯的。舊算法分子用「需求零件總面積」，
+- [x] ✅ 利用率計算+月報 — **v2.1 更正**：舊版 ✅ 是錯的。舊算法分子用「需求零件總面積」，
   零件排不下時回報 100%（實測：2000×1000 零件放 2000×1000 板、刀縫 3 → 0 件排入、利用率 1.0）。
   v2.1 改為「實際放置面積 ÷ 用板面積」、回傳 `unplaced`／`placed_count`／`requested_count`，
   有零件排不下時 job 狀態為 `partial`（不列入 KPI），前端顯示紅色警示；
   migration `c3e8f1a2b4d5` 重算歷史 `nesting_jobs`（舊值備份於 `result_json.legacy_v20`，可 downgrade 還原）。
   驗證：引擎 21 項 pytest 全過，且新增的 5 項在舊引擎上確實失敗；migration 的重算函式與新引擎 4 組輸入結果一致。
-  **未驗證**：真實 PostgreSQL 上的 migration 與 HTTP 回應——已寫入 CI（`verify_migration_v21.py`），待 GitHub Actions 綠燈才能改 ✅
+  **v2.2 補上執行期證據**：CI #6（commit `3b8665d`）綠燈，`verify_migration_v21.py` 在真實
+  PostgreSQL 16 上完成 downgrade → 寫入舊格式資料 → upgrade → 查庫比對 → downgrade 還原 → 再 upgrade
 - [ ] ⚠️ 剩料自動入庫 — `remnant_inventory`表隨nesting job自動產生剩料紀錄，未驗證與sheet_stocks的入庫串接
 - [ ] ❌ 切割指示圖匯出（PNG/PDF） — 未見實作
 - [x] ✅ **（新增）9種板型自動比較** — `POST /nesting/compare-presets`已測試，正確推薦最省片數板型
@@ -134,11 +150,14 @@
 ## Phase 8: 儀表板+上線 ⚠️（後端指標已驗證，部署相關全未執行）
 - [x] ⚠️ 廠長儀表板（Recharts圖表） — `/api/v1/analytics/dashboard`後端已測試並回傳正確KPI數值；前端Recharts圖表渲染僅確認編譯通過，未驗證視覺呈現
 - [x] ✅ 訂單達交率追蹤 — dashboard端點回傳`on_time_delivery_rate_pct`欄位，邏輯已驗證
-- [x] ⚠️ 板材利用率月報 — dashboard端點回傳`avg_material_utilization_pct`欄位，跨模組串接正確；
-  **但 v2.1 之前的數值被錯誤的利用率算法高估**（見 Phase 7）。v2.1 修正後待 CI 與正式資料確認
-- [ ] ⚠️ 資料庫自動備份 — **v2.1 新增** `db-backup` 容器（`infra/backup/backup.sh`）：每天 `pg_dump`、
+- [x] ✅ 板材利用率月報 — dashboard端點回傳`avg_material_utilization_pct`欄位，跨模組串接正確；
+  **v2.1 之前的數值被錯誤的利用率算法高估**（見 Phase 7），v2.1 修正後由 CI #6 綠燈確認
+  （migration 重算 ＋ 端到端驗證通過）。真實生產資料的數值仍待上線後觀察
+- [x] ✅ 資料庫自動備份 — **v2.1 新增** `db-backup` 容器（`infra/backup/backup.sh`）：每天 `pg_dump`、
   做完用 `pg_restore --list` 驗證、保留 14 天；`restore.sh` 還原需 `--yes`。
-  CI 新增「備份 → 還原到新庫 → 每張表列數比對」往返測試。**未驗證**：CI 尚未跑、正式主機尚未啟用；
+  CI 的「備份 → 還原到新庫 → 每張表列數比對」往返測試跑的是正式環境同一支腳本，
+  該步驟以 `set -euo pipefail` 結尾接 `diff`，列數不一致即整個 job 失敗——**CI #6 綠燈即為通過證據**。
+  **仍未完成**：正式主機尚未 `docker compose up -d db-backup` 啟用；
   備份與資料庫在同一台主機，**異地備份尚未設定**（見 `DEPLOYMENT.md`「資料庫備份」）
 - [ ] ❌ AWS Taiwan部署 — 未執行
 - [ ] ❌ 域名 + SSL設定 — 未執行
