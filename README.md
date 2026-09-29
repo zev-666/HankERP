@@ -230,6 +230,22 @@ FastAPI 自 0.106 起，yield 相依的收尾就在回應送出之前執行，�
 在沒有確切證據之前不改動 session 管理，本輪只做兩件事提高下次抓到的機率：
 CI 的端到端驗證連跑三次，以及讓 `verify_e2e.py` 不再吞掉伺服器的錯誤訊息。
 
+#### 本機怎麼跑這三項驗證
+
+```bash
+# pytest 不在 backend 映像裡（Dockerfile 只裝 requirements.txt，
+# 不把測試相依放進正式映像）。本機要先在容器內補裝：
+docker compose exec backend pip install -q -r requirements-dev.txt
+docker compose exec backend pytest -q
+
+docker compose exec backend python scripts/verify_e2e.py
+docker compose exec backend python scripts/verify_rbac.py
+```
+
+`verify_rbac.py` 需要登入 10 次（管理員 ＋ 9 個角色），而 `/auth/login`
+限流 5/minute，因此腳本內建等待重試，整支約需 1–2 分鐘。
+**登入限流刻意不放寬**——那是擋暴力破解用的，不該為了讓測試好跑而降低。
+
 #### v2.2 實測數字（2026-09-29，本機 Docker 真實環境）
 
 | 項目 | 數值 | 量法 |

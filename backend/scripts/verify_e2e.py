@@ -69,6 +69,20 @@ print("=" * 70)
 print("1. 登入")
 r = call("POST", "/api/v1/auth/login",
          {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, auth=False)
+# 登入限流 5/minute。CI 會連跑三次本腳本，再接 verify_rbac.py，
+# 同一分鐘內的登入次數會超過額度，這裡等待重試而不是放寬限流。
+if "access_token" not in r:
+    import time as _time
+    for _ in range(8):
+        _time.sleep(13)
+        FAILS.clear()
+        r = call("POST", "/api/v1/auth/login",
+                 {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, auth=False)
+        if "access_token" in r:
+            break
+if "access_token" not in r:
+    print(f"✗ 登入失敗，無法繼續：{r}")
+    sys.exit(1)
 TOKEN = r["access_token"]
 
 print("\n2. 官網詢價（公開端點，無需登入）")

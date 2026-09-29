@@ -20,6 +20,7 @@ RBAC 執行層的真實 HTTP 驗證（v2.2）。
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid as _uuid
@@ -58,6 +59,26 @@ def call(method, path, body=None, token=None):
             return e.code, {"raw": raw.decode(errors="replace")[:300]}
 
 
+def login(email, password, attempts=8, wait=13):
+    """
+    登入並回傳 (status, payload)，遇到 429 自動等待重試。
+
+    `/auth/login` 限流 5/minute（擋暴力破解），而本腳本需要登入 10 次
+    （管理員 ＋ 9 個角色），必定會撞到。這裡用等待重試處理，
+    **不把登入限流放寬**——那等於為了讓測試好跑而降低資安。
+    8 次嘗試 × 13 秒約可涵蓋兩個限流視窗。
+    """
+    for i in range(attempts):
+        status, payload = call("POST", "/api/v1/auth/login",
+                               {"email": email, "password": password})
+        if status != 429:
+            return status, payload
+        if i == 0:
+            print(f"       （登入限流 5/minute，等待重試中…）")
+        time.sleep(wait)
+    return status, payload
+
+
 def expect(condition, label, detail=""):
     print(f"[{'PASS' if condition else 'FAIL'}] {label}")
     if not condition:
@@ -73,8 +94,7 @@ if not ADMIN_PASSWORD:
 
 print("=" * 70)
 print("0. 管理員登入")
-status, payload = call("POST", "/api/v1/auth/login",
-                       {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+status, payload = login(ADMIN_EMAIL, ADMIN_PASSWORD)
 if status != 200:
     print(f"✗ 管理員登入失敗：{status} {payload}")
     sys.exit(1)
@@ -107,8 +127,7 @@ for role in ROLE_NAMES:
     if status != 200:
         expect(False, f"建立 {role} 帳號", f"{status} {payload}")
         continue
-    status, payload = call("POST", "/api/v1/auth/login",
-                           {"email": email, "password": TEST_PASSWORD})
+    status, payload = login(email, TEST_PASSWORD)
     if status != 200:
         expect(False, f"{role} 登入", f"{status} {payload}")
         continue
