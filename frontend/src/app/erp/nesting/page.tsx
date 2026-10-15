@@ -358,12 +358,14 @@ export default function NestingPage() {
                           {sh.cuts.map((c: any) => {
                             const isH = c.direction === "橫切";
                             const isRip = c.phase === "開條";
+                            // v2.3.4：修窄刀（比條寬窄的零件再修一刀）用琥珀色點線，跟 cutplan 一致
+                            const isNarrow = c.phase === "修窄";
                             return (
                               <line key={c.seq}
                                 x1={isH ? c.from_mm : c.position_mm} y1={isH ? c.position_mm : c.from_mm}
                                 x2={isH ? c.to_mm : c.position_mm} y2={isH ? c.position_mm : c.to_mm}
-                                stroke="#dc2626" strokeWidth={isRip ? sheetL / 700 : sheetL / 1100}
-                                strokeDasharray={isRip ? "" : `${sheetL / 100} ${sheetL / 200}`}
+                                stroke={isNarrow ? "#b45309" : "#dc2626"} strokeWidth={isRip ? sheetL / 700 : sheetL / 1100}
+                                strokeDasharray={isRip ? "" : isNarrow ? `${sheetL / 400} ${sheetL / 250}` : `${sheetL / 100} ${sheetL / 200}`}
                                 opacity={isRip ? 1 : 0.75} />
                             );
                           })}
@@ -375,6 +377,7 @@ export default function NestingPage() {
                         <div className="flex items-center gap-4 text-[11px] text-slate-500">
                           <span className="flex items-center gap-1.5"><span className="inline-block w-5 h-0.5 bg-red-600" />開條刀（整刀切穿）</span>
                           <span className="flex items-center gap-1.5"><span className="inline-block w-5 border-t border-dashed border-red-600" />條內分件刀</span>
+                          <span className="flex items-center gap-1.5"><span className="inline-block w-5 border-t-2 border-dotted border-amber-700" />窄件修一刀</span>
                           <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 border border-dashed border-teal-600 bg-teal-50" />整條剩料</span>
                         </div>
 
@@ -398,7 +401,8 @@ export default function NestingPage() {
                                     <td>
                                       <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                                         c.phase === "開條" ? "bg-orange-50 text-orange-700"
-                                        : c.phase === "分件" ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-500"}`}>
+                                        : c.phase === "分件" ? "bg-teal-50 text-teal-700"
+                                        : c.phase === "修窄" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
                                         {c.phase}
                                       </span>
                                     </td>

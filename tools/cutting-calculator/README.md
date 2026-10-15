@@ -21,6 +21,18 @@
 Python 版引擎必須對同樣輸入產生同樣結果（兩套引擎交叉比對）。
 
 
+## v2.3.4 起：比對基準改為 cutplan 10-15 版
+
+**本資料夾的 `cutplan.html` 仍是 09-24 版**（歷史對照）。v2.3.4 起 `engine_cli.js` 改抽自 Project 知識庫的
+`claude/cutplan_2026-10-15.html`（138,434 bytes，SHA-256 `cc7058b5…`；這版有越南文介面與 Excel 匯出，
+沒有放進 repo）。抽取範圍：
+
+- `packOnce()`／`packByGroup()`：與 09-24 版相同
+- `nest()`：多了沿短邊開條時不可轉件長寬對調（`piecesIn`）
+- 刀序與剩料：`oldToResult()` → `mxCutList()`／`mxRemnants()`（cutplan「固定張數」模式那條路），
+  多了「修窄」刀與修窄邊料
+- **沒有** `mxOptimize()`（樣板法、補位、`REPEAT_TRY`）——那是 v2.4 的移植範圍
+
 ## 與後端 Python 引擎的交叉比對
 
 `backend/app/ai/nesting_strip.py` 是本檔引擎的 Python 移植版。

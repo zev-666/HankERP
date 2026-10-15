@@ -1,6 +1,11 @@
 """
-開條裁板引擎（二階段 Guillotine）—— 由 `tools/cutting-calculator/cutplan.html`
-（2026-09-24 版）的 JavaScript 引擎逐函式移植。
+開條裁板引擎（二階段 Guillotine）—— 由 `cutplan.html` 的 JavaScript 引擎逐函式移植。
+
+- v2.3（2026-09-24 版）：packOnce／packByGroup／nest／cutList／remnantsOf
+- v2.3.4（2026-10-15 版，Project `claude/cutplan_2026-10-15.html`）：
+  刀序與剩料改照 `mxCutList()`／`mxRemnants()`，補上「修窄」刀與修窄邊料；
+  `nest()` 修正沿短邊開條時不可轉件被轉 90°。
+  比對用的 JS 抽取版是 `tools/cutting-calculator/engine_cli.js`。
 
 為什麼要重寫排版核心
 --------------------
@@ -284,27 +289,44 @@ def map_rect(res: dict, x: float, y: float, w: float, h: float) -> dict:
 
 # ── 剩料 ─────────────────────────────────────────────────────────────
 
+def _js_num(v: float) -> str:
+    """數字轉字串，跟 JS 的樣板字串一樣：整數不帶 `.0`（JS 印 400，Python 的 f-string 會印 400.0）。"""
+    v = float(v)
+    return str(int(v)) if v.is_integer() else repr(v)
+
+
+def _strips_sorted(sheet: dict) -> list[dict]:
+    """條帶依 y、條內零件依 x 排好（等同 cutplan 的 `oldToResult()`）。"""
+    return [{**st, "items": sorted(st["items"], key=lambda it: it["x"])}
+            for st in sorted(sheet["strips"], key=lambda s: s["y"])]
+
+
 def remnants_of(sheet: dict, res: dict, min_rem: float) -> list[dict]:
     """
-    算一張板的剩料，回傳真實板材座標。
+    算一張板的剩料，回傳真實板材座標（移植自 cutplan 10-15 版 `mxRemnants()`）。
 
-    `band=True` 是貫穿整板的整條剩料（邊是直的，可以直接上架再用）；
-    其餘是條尾的零星碎料。等級沿用計算器的定義：
-    A ≥ 300×300（一才以上）、B ≥ 150×150、C 其餘。
+    來源有三種，順序與 JS 相同：每一條先列條尾料、再列該條的修窄邊料，最後是整條剩料。
+    - 條尾料：條帶最後一件之後剩下的長度
+    - 修窄邊料（v2.3.4 新增）：同一條裡比條寬窄的零件，修窄之後切下來的那塊
+    - 整條剩料（`band=True`）：貫穿整板，邊是直的，可以直接上架再用
+    等級：A ≥ 300×300（一才以上）、B ≥ 150×150、C 其餘。未達 `min_rem` 的零星料不列出（整條除外）。
     """
     pack_l, pack_w, kerf = res["packL"], res["packW"], res["kerf"]
     raw: list[dict] = []
-    strips = sorted(sheet["strips"], key=lambda s: s["y"])
+    strips = _strips_sorted(sheet)
     for i, st in enumerate(strips):
-        gap = kerf if st["items"] else 0
-        w = pack_l - st["x"] - gap
+        w = pack_l - st["x"] - kerf
         if w > 0.5:
-            raw.append({"x": st["x"] + gap, "y": st["y"], "w": w, "h": st["h"],
+            raw.append({"x": st["x"] + kerf, "y": st["y"], "w": w, "h": st["h"],
                         "from": f"第 {i + 1} 條尾料", "band": False})
+        for it in st["items"]:
+            hh = st["h"] - it["h"] - kerf
+            if hh > 0.5:
+                raw.append({"x": it["x"], "y": it["y"] + it["h"] + kerf, "w": it["w"], "h": hh,
+                            "from": f"第 {i + 1} 條修窄邊料", "band": False})
     rest = pack_w - sheet["usedH"] - (kerf if strips else 0)
     if rest > 0.5:
-        raw.append({"x": 0, "y": sheet["usedH"] + (kerf if strips else 0),
-                    "w": pack_l, "h": rest,
+        raw.append({"x": 0, "y": sheet["usedH"] + kerf, "w": pack_l, "h": rest,
                     "from": "整條・沿短邊" if res["axis"] == "W" else "整條・沿長邊",
                     "band": True})
 
@@ -312,7 +334,7 @@ def remnants_of(sheet: dict, res: dict, min_rem: float) -> list[dict]:
     for r in raw:
         m = map_rect(res, r["x"], r["y"], r["w"], r["h"])
         a = r["w"] * r["h"]
-        dim_a, dim_b = max(m["w"], m["h"]), min(m["w"], m["h"])
+        dim_a, dim_b = max(r["w"], r["h"]), min(r["w"], r["h"])
         rec = {**m, "long": dim_a, "short": dim_b, "area": a, "cai": a / CAI,
                "from": r["from"], "band": r["band"],
                "usable": dim_b >= min_rem and dim_a >= min_rem,
@@ -326,13 +348,18 @@ def remnants_of(sheet: dict, res: dict, min_rem: float) -> list[dict]:
 
 def cut_list(sheet: dict, res: dict) -> list[dict]:
     """
-    照裁板機的實際動作產生刀序：先修邊 → 開條 → 條內分件。
+    照裁板機的實際動作產生刀序（移植自 cutplan 10-15 版 `mxCutList()`）：
+    修邊 → 開條 → 條內分件 → **修窄**。
+
+    修窄（v2.3.4 新增）：同一條裡比條寬窄的零件，分件後還停在條寬，要再沿條帶方向下一刀
+    修到自己的寬度。v2.3 漏了這一段，照刀序施工這些零件尺寸會不對。
 
     `pos` 是基準位置（真實板材座標），`from`/`to` 是這一刀的起訖。
     最後一刀若切完只剩不到一個刀縫，就不下那一刀（切不出東西）。
     """
     pack_l, pack_w = res["packL"], res["packW"]
     trim, kerf, axis = res["trim"], res["kerf"], res["axis"]
+    tail = kerf + 0.5
     cuts: list[dict] = []
     n = 0
 
@@ -356,25 +383,27 @@ def cut_list(sheet: dict, res: dict) -> list[dict]:
                      "pos": _round1(trim), "from": 0, "to": _round1(res["sheetW"]),
                      "len": _round1(res["sheetW"]), "note": "修左緣基準邊"})
 
-    strips = sorted(sheet["strips"], key=lambda s: s["y"])
+    strips = _strips_sorted(sheet)
     # 第一階段：開條
     for i, st in enumerate(strips):
         edge = st["y"] + st["h"]
-        is_last = i == len(strips) - 1
-        rest = pack_w - edge
-        if not is_last or rest > kerf + 0.5:
+        if i < len(strips) - 1 or pack_w - edge > tail:
             emit("開條", "rip", edge, 0, pack_l,
-                 f"分出第 {i + 1} 條（條寬 {_round1(st['h'])} mm）")
+                 f"分出第 {i + 1} 條（條寬 {_js_num(_round1(st['h']))} mm）")
     # 第二階段：條內分件
     for i, st in enumerate(strips):
-        items = sorted(st["items"], key=lambda it: it["x"])
+        items = st["items"]
         for j, it in enumerate(items):
             edge = it["x"] + it["w"]
-            is_last = j == len(items) - 1
-            rest = pack_l - edge
-            if not is_last or rest > kerf + 0.5:
+            if j < len(items) - 1 or pack_l - edge > tail:
                 emit("分件", "cross", edge, st["y"], st["y"] + st["h"],
-                     f"第 {i + 1} 條・切出 {it['name']} {_round1(it['w'])}×{_round1(it['h'])}")
+                     f"第 {i + 1} 條・切在 {_js_num(_round1(it['w']))}")
+    # 第三階段：修窄（比條寬窄的零件，沿條帶方向再一刀）
+    for i, st in enumerate(strips):
+        for it in st["items"]:
+            if st["h"] - it["h"] > 0.5:
+                emit("修窄", "rip", st["y"] + it["h"], it["x"], it["x"] + it["w"],
+                     f"第 {i + 1} 條・{it['name']} 修到 {_js_num(_round1(it['h']))}")
     return cuts
 
 
@@ -414,6 +443,11 @@ def nest(parts: Iterable[dict], sheet_l: float, sheet_w: float, kerf: float = 3,
         for axis in axes:
             pack_l = u_l if axis == "L" else u_w
             pack_w = u_w if axis == "L" else u_l
+            # v2.3.4（cutplan 10-15 版 nest() 的 piecesIn 修正）：沿短邊開條（axis W）時
+            # pack frame 與板材轉了 90°，不可轉的零件要先把長寬對調，貼回板材時「長」才會
+            # 沿板長邊。v2.3 少了這一步，不可轉件在 axis W 會被轉 90°。
+            ax_pieces = pieces if axis == "L" else [
+                p if p["rot"] else {**p, "l": p["w"], "w": p["l"]} for p in pieces]
             for sort_key in ("height", "long", "area"):
                 for orient in ("cross", "along", "free"):
                     for fit_mode in ("waste", "existing", "group"):
@@ -421,9 +455,9 @@ def nest(parts: Iterable[dict], sheet_l: float, sheet_w: float, kerf: float = 3,
                             # group 排法與 sortKey／orient 無關，只跑一次避免重複計算
                             if not (sort_key == "height" and orient == "cross"):
                                 continue
-                            r = _pack_by_group(pieces, pack_l, pack_w, kerf, max_sheets)
+                            r = _pack_by_group(ax_pieces, pack_l, pack_w, kerf, max_sheets)
                         else:
-                            r = _pack_once(pieces, pack_l, pack_w, kerf,
+                            r = _pack_once(ax_pieces, pack_l, pack_w, kerf,
                                            sort_key, orient, max_sheets, fit_mode)
 
                         placed = sum(len(st["items"]) for sh in r["sheets"] for st in sh["strips"])
@@ -451,9 +485,11 @@ def nest(parts: Iterable[dict], sheet_l: float, sheet_w: float, kerf: float = 3,
                             is_tail = len(r["sheets"]) > 1 and si == len(r["sheets"]) - 1
                             if not is_tail and rest_w >= min_rem and pack_l >= min_rem:
                                 band_area += rest_w * pack_l
-                            # 真實刀數：跟 cut_list() 同一套判斷邏輯就地算，
-                            # 確保評分刀數與畫出來的刀序表一致
+                            # 評分刀數：開條＋分件，跟 cut_list() 前兩階段同一套判斷
                             # （2026-09-23 發現的落差：22 vs 23，09-24 修正）。
+                            # ⚠ 不含 v2.3.4 加進 cut_list() 的「修窄」刀——cutplan 10-15 版的
+                            # nest() 評分也不算，照規格移植。修窄刀只在利用率、整條剩料都打平時
+                            # 才可能影響選擇；v2.4 移植 mxOptimize() 後評分會改用含修窄的刀數。
                             if trim > 0:
                                 cut_count += 2
                             for i, st in enumerate(sh["strips"]):

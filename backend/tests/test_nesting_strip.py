@@ -1,11 +1,13 @@
 """
-開條裁板引擎的回歸測試（v2.3）。
+開條裁板引擎的回歸測試（v2.3 建立，v2.3.4 更新基準）。
 
 基準從哪裡來
 ------------
 `fixtures/nesting_strip_regression.json` 的預期值**不是人工填的，也不是拿
-Python 版自己的輸出當答案**——是用 Node 直接執行 `tools/cutting-calculator/cutplan.html`
-（使用者確認的正確版，SHA-256 `ff66c946…923fd3672`）抽出的 JS 引擎產生的。
+Python 版自己的輸出當答案**——是用 Node 執行 `tools/cutting-calculator/engine_cli.js`
+產生的。v2.3.4 起 engine_cli.js 抽自 Project 的 `claude/cutplan_2026-10-15.html`
+（138,434 bytes，SHA-256 `cc7058b5…`）：排版用 `nest()`，刀序與剩料用
+`mxCutList()`／`mxRemnants()`（含「修窄」刀與修窄邊料）。
 
 這就是 `CUTTING_STRIP_PLAN.md` 第七節指定的回歸方法：
 「兩套引擎同輸入交叉比對」。Python 版是移植品，JS 版是規格。
@@ -92,7 +94,7 @@ def test_每件座標與每刀位置與_js_引擎一致(case):
     assert got_sheets == exp["sheets"]
 
     got_cuts = [[{"n": c["n"], "phase": c["phase"], "dir": c["dir"], "pos": c["pos"],
-                  "from": c["from"], "to": c["to"], "len": c["len"]}
+                  "from": c["from"], "to": c["to"], "len": c["len"], "note": c["note"]}
                  for c in cut_list(sh, res)] for sh in res["sheets"]]
     assert got_cuts == exp["cuts"]
 
@@ -100,7 +102,8 @@ def test_每件座標與每刀位置與_js_引擎一致(case):
     got_rem = [[{"x": _round1(r["x"]), "y": _round1(r["y"]),
                  "w": _round1(r["w"]), "h": _round1(r["h"]),
                  "long": _round1(r["long"]), "short": _round1(r["short"]),
-                 "band": r["band"], "usable": r["usable"], "grade": r["grade"]}
+                 "band": r["band"], "usable": r["usable"], "grade": r["grade"],
+                 "from": r["from"]}
                 for r in remnants_of(sh, res, min_rem)] for sh in res["sheets"]]
     assert got_rem == exp["remnants"]
 
@@ -149,16 +152,20 @@ def test_零重疊與零越界(case):
 
 
 @pytest.mark.parametrize("case", FIXTURE, ids=IDS)
-def test_評分刀數等於刀序表刀數(case):
+def test_評分刀數等於刀序表的開條加分件刀數(case):
     """
     2026-09-23 發現過的落差：評分用 22 刀、刀序表畫 23 刀，
     當條尾剩 3.5～6.5 mm 時評分會少算一刀，排序可能選錯方案。
     09-24 已把兩處統一，這裡把它釘住。
+
+    v2.3.4：刀序表多了「修窄」刀，但 cutplan 10-15 版 `nest()` 的評分不算修窄刀，
+    所以比的是「刀序表扣掉修窄」。v2.4 改用 mxOptimize() 時再統一。
     """
     res = run(case["input"])
     if res is None or "error" in res:
         return
-    assert res["cutCount"] == sum(len(cut_list(sh, res)) for sh in res["sheets"])
+    assert res["cutCount"] == sum(
+        sum(1 for c in cut_list(sh, res) if c["phase"] != "修窄") for sh in res["sheets"])
 
 
 @pytest.mark.parametrize("case", FIXTURE, ids=IDS)
@@ -220,3 +227,79 @@ def test_九種板型且標準板為_S():
     for expected in [(1915, 1315), (2000, 1000), (2365, 1415), (1905, 1005),
                      (2045, 1045), (2205, 1105), (1855, 1245), (2565, 1315), (3095, 1585)]:
         assert expected in sizes, f"缺少板型 {expected}"
+
+
+# ── 5. v2.3.4：修窄刀與不可轉件方向（不依賴 fixture）────────────────────
+
+def _real_items(res):
+    """每件零件在真實板材上的位置，連同所在條帶。"""
+    for sh in res["sheets"]:
+        for st in sh["strips"]:
+            for it in st["items"]:
+                yield sh, st, it, map_rect(res, it["x"], it["y"], it["w"], it["h"])
+
+
+@pytest.mark.parametrize("case", FIXTURE, ids=IDS)
+def test_比條寬窄的零件都有一刀修窄_且位置正確(case):
+    """
+    同一條裡比條寬窄的零件，分件後還停在條寬，必須再一刀修到自己的寬度。
+    v2.3 漏了這一刀（照刀序施工零件尺寸會錯）；這一項在 v2.3 的程式上會失敗。
+    """
+    res = run(case["input"])
+    if res is None or "error" in res:
+        return
+    trim = case["input"]["trim"]
+    for sh in res["sheets"]:
+        cuts = cut_list(sh, res)
+        narrow = [c for c in cuts if c["phase"] == "修窄"]
+        expected = []
+        for st in sh["strips"]:
+            for it in st["items"]:
+                if st["h"] - it["h"] > 0.5:
+                    expected.append((_round1(trim + st["y"] + it["h"]),
+                                     _round1(trim + it["x"]), _round1(trim + it["x"] + it["w"])))
+        assert sorted((c["pos"], c["from"], c["to"]) for c in narrow) == sorted(expected)
+        # 修窄一律在開條、分件之後
+        phases = [c["phase"] for c in cuts]
+        if narrow:
+            first = phases.index("修窄")
+            assert all(p == "修窄" for p in phases[first:])
+
+
+def test_修窄刀數_混合高矮件():
+    """
+    「混合含不可旋轉」這組在 v2.3.4 排成：第 2 條條寬 400，
+    裡面 6 件 200×150 → 這 6 件各要一刀修窄。
+    """
+    case = next(c for c in FIXTURE if c["name"] == "混合含不可旋轉")
+    res = run(case["input"])
+    cuts = [c for sh in res["sheets"] for c in cut_list(sh, res)]
+    assert sum(1 for c in cuts if c["phase"] == "修窄") == 6
+    assert len(cuts) == 23
+
+
+@pytest.mark.parametrize("case", FIXTURE, ids=IDS)
+def test_不可轉零件的長一定沿板長邊(case):
+    """
+    `rot: false` 的零件，放到真實板材上時「長」必須沿板長方向（x 軸）。
+    v2.3 在沿短邊開條（axis W）時會把不可轉件轉 90°；這一項在 v2.3 的程式上會失敗。
+    """
+    res = run(case["input"])
+    if res is None or "error" in res:
+        return
+    parts = {p["id"]: p for p in case["input"]["parts"]}
+    for _, _, it, m in _real_items(res):
+        p = parts[it["id"]]
+        if not p["rot"]:
+            assert (m["w"], m["h"]) == (p["l"], p["w"]), f"{p['name']} 被轉了 90°：{m}"
+
+
+def test_修窄邊料列入剩料():
+    """修窄切下來的那塊，達門檻就要列為剩料（v2.3 不會列）。"""
+    case = next(c for c in FIXTURE if c["name"] == "混合含不可旋轉")
+    res = run(case["input"])
+    rems = [r for sh in res["sheets"] for r in remnants_of(sh, res, 50)]
+    narrow = [r for r in rems if "修窄邊料" in r["from"]]
+    # 400 − 150 − 3 = 247 寬、200 長，共 6 塊
+    assert len(narrow) == 6
+    assert all((r["long"], r["short"]) == (247, 200) for r in narrow)
