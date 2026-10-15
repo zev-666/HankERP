@@ -17,6 +17,9 @@ set -uo pipefail
 
 DOMAIN="everevo.com.tw"
 SITE="https://$DOMAIN"
+# API 用獨立子網域（v2.3.7）：Cloudflare 後台的路由表單不保證有「路徑」欄位，
+# 一個網址對一個服務最穩。瀏覽器從 everevo.com.tw 呼叫 api.everevo.com.tw，靠 CORS 放行。
+API="https://api.$DOMAIN"
 CORS="https://$DOMAIN,https://www.$DOMAIN"
 APP_DIR="$HOME/HankERP"
 PROD_FILE="docker-compose.prod.yml"
@@ -105,7 +108,7 @@ fi
 # 不必每次加 -f，也不會手滑用開發版把 port 又開出去。
 setkv COMPOSE_FILE "$PROD_FILE";            ok "COMPOSE_FILE=$PROD_FILE"
 setkv ENVIRONMENT production;               ok "ENVIRONMENT=production（關閉 /docs）"
-setkv NEXT_PUBLIC_API_URL "$SITE";          ok "NEXT_PUBLIC_API_URL=$SITE"
+setkv NEXT_PUBLIC_API_URL "$API";           ok "NEXT_PUBLIC_API_URL=$API"
 setkv NEXT_PUBLIC_SITE_URL "$SITE";         ok "NEXT_PUBLIC_SITE_URL=$SITE"
 setkv CORS_ORIGINS "$CORS";                 ok "CORS_ORIGINS=$CORS"
 
@@ -147,17 +150,20 @@ D=$(in_backend /docs)
 [ "$D" = "404" ] && ok "/docs 已關閉（正式模式）" || warn "/docs 回 $D（預期 404）"
 W=$($DC exec -T frontend wget -q -O /dev/null -S http://localhost:3000/login 2>&1 | awk '/HTTP\//{print $2}' | tail -1)
 [ "$W" = "200" ] && ok "前端登入頁（容器內）→ 200" || warn "前端登入頁回 $W"
-if $DC exec -T frontend sh -c "grep -rlF '$SITE' .next 2>/dev/null | head -1" | grep -q .; then
-  ok "前端已編入網址 $SITE"
-else warn "前端程式碼裡找不到 $SITE"; fi
+if $DC exec -T frontend sh -c "grep -rlF '$API' .next 2>/dev/null | head -1" | grep -q .; then
+  ok "前端已編入 API 網址 $API"
+else warn "前端程式碼裡找不到 $API"; fi
 LISTEN=$(ss -ltnH 2>/dev/null | awk '{print $4}' | grep -E ':(3000|8000|5432|6379)$' || true)
 [ -z "$LISTEN" ] && ok "主機沒有對外開 3000／8000／5432／6379" || warn "主機仍在監聽：$LISTEN"
 echo -n "  cloudflared："
 $DC logs --tail 40 cloudflared 2>&1 | grep -c "Registered tunnel connection" | xargs -I{} echo "{} 條通道連線"
-for path in /health /login /; do
-  P=$(curl -s -o /dev/null -w '%{http_code}' -m 15 "$SITE$path")
-  [ "$P" = "200" ] && ok "公開網址 $SITE$path → 200" || warn "公開網址 $SITE$path 回 $P（DNS 或 Tunnel 路由還沒設好？）"
+for url in "$API/health" "$SITE/login" "$SITE/"; do
+  P=$(curl -s -o /dev/null -w '%{http_code}' -m 15 "$url")
+  [ "$P" = "200" ] && ok "公開網址 $url → 200" || warn "公開網址 $url 回 $P（DNS 或 Tunnel 路由還沒設好？）"
 done
+CO=$(curl -s -o /dev/null -w '%{http_code}' -m 15 -X OPTIONS "$API/api/v1/auth/login" \
+  -H "Origin: $SITE" -H "Access-Control-Request-Method: POST")
+[ "$CO" = "200" ] && ok "CORS：$SITE 可以呼叫 $API" || warn "CORS 預檢回 $CO（登入可能會失敗）"
 PSQL="$DC exec -T db psql -U erp_user -d acrylic_erp -tA -c"
 echo "  角色數：$($PSQL 'select count(*) from roles' 2>/dev/null)"
 NOROLE=$($PSQL "select email from users where role_id is null and is_active" 2>/dev/null)

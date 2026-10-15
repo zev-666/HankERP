@@ -20,11 +20,13 @@
 ## Cloudflare Tunnel 上線（v2.3.5）
 
 ```
-訪客 ──HTTPS──▶ Cloudflare ══加密通道══▶ 主機上的 cloudflared 容器 ─┬─▶ frontend:3000
-                                        （由主機主動往外連）        └─▶ backend:8000（/api/*、/health）
+訪客 ──HTTPS──▶ Cloudflare ══加密通道══▶ 主機上的 cloudflared 容器 ─┬─▶ frontend:3000（everevo.com.tw、www）
+                                        （由主機主動往外連）        └─▶ backend:8000（api.everevo.com.tw）
 ```
 
-前台與 API 在**同一個網域**，由 Tunnel 依路徑分流，所以沒有跨網域問題，也只需要一張憑證（Cloudflare 管）。
+前台 `everevo.com.tw`、API `api.everevo.com.tw`，**一個網址對一個服務**（v2.3.7 起；v2.3.5 原本設計同網域依路徑分流，
+但 Cloudflare 後台的路由表單不保證有「路徑」欄位，改成子網域最穩）。瀏覽器跨子網域呼叫 API 靠 `CORS_ORIGINS` 放行，
+部署腳本最後會檢查。單層子網域在 Cloudflare 免費憑證（Universal SSL）範圍內，不用另外買憑證。
 主機不對外開 80／443／3000／8000，IP 被掃到也沒有服務可打。
 
 ### 一次性設定（使用者在瀏覽器操作）
@@ -32,16 +34,16 @@
 1. **買網域** `everevo.com.tw`：.com.tw 要在台灣的註冊商買，用**永陛實業有限公司（統編 12659649）**名義，帳號由公司保管。
 2. **把網域交給 Cloudflare 管 DNS**：Cloudflare → Add a domain → `everevo.com.tw` → Free 方案 →
    記下 Cloudflare 給的兩組 nameserver → 回註冊商後台把 DNS 伺服器改成這兩組 → 等 Cloudflare 顯示 Active。
-3. **建立 Tunnel**：Cloudflare Zero Trust → Networks → Tunnels → Create a tunnel → 類型 Cloudflared →
-   名稱 `everevo-prod` → 環境選 Docker → 畫面上的指令裡 `--token` 後面那一長串就是 token。
-   **不要複製到任何地方**，部署腳本會請你直接貼在主機上（輸入不顯示）。
-4. **設定路由**（Tunnel 的 Public hostname／Published application routes），**順序很重要，路徑規則放最上面**：
+3. **建立 Tunnel**：Cloudflare 後台 → **Networking → Tunnels**（舊版介面在 Zero Trust → Networks → Tunnels）→
+   Create a tunnel → 名稱 `everevo-prod` → 安裝指令畫面選 Docker，指令裡 `--token` 後面那一長串就是 token。
+   **不要複製到任何地方、不要在主機上執行那行指令**，部署腳本會請你直接貼 token（輸入不顯示），由 `cloudflared` 容器連線。
+4. **設定路由**（Tunnel 的 Routes → Add route → Published application；舊版叫 Public hostname）：
 
-   | # | 子網域 | 網域 | Path | Service |
-   |---|---|---|---|---|
-   | 1 | （空） | everevo.com.tw | `^/(api/|health$)` | HTTP → `backend:8000` |
-   | 2 | （空） | everevo.com.tw | （空） | HTTP → `frontend:3000` |
-   | 3 | www | everevo.com.tw | （空） | HTTP → `frontend:3000` |
+   | # | 子網域 | 網域 | 服務網址（Service URL） |
+   |---|---|---|---|
+   | 1 | （空白） | everevo.com.tw | `http://frontend:3000` |
+   | 2 | www | everevo.com.tw | `http://frontend:3000` |
+   | 3 | api | everevo.com.tw | `http://backend:8000` |
 
    `backend`、`frontend` 是 Docker 內網的服務名稱，cloudflared 容器跟它們在同一個網路，所以這樣寫就連得到。
 5. **www 轉址到主網域**：Rules → Redirect Rules → 用範本「Redirect from WWW to root」。

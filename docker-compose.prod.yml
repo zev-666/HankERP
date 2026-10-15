@@ -98,7 +98,7 @@ services:
     build:
       context: ./frontend
       args:
-        # 建置期寫死進 JS：瀏覽器打 API 的網址（同網域，由 Tunnel 依路徑 /api 分流到 backend）
+        # 建置期寫死進 JS：瀏覽器打 API 的網址（v2.3.7 起為 https://api.everevo.com.tw，Tunnel 直接對到 backend）
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?請在根目錄.env設定NEXT_PUBLIC_API_URL，例如 https://everevo.com.tw}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?請在根目錄.env設定NEXT_PUBLIC_SITE_URL，例如 https://everevo.com.tw}
     environment:

@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| **目前版本** | v2.3.6（2026-10-15，修正 AI 快速估價：少算材料費、數字空白） |
+| **目前版本** | v2.3.7（2026-10-15，上線設定改為 API 子網域 `api.everevo.com.tw`） |
 | **後端** | FastAPI 0.135 + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL 15/16 + Celery + Redis |
 | **前端** | Next.js 16.3.5 + Tailwind CSS + TanStack Query + Zustand + Recharts |
 | **實測規模** | 13 個業務模組 · 68 個業務 API 端點（＋`/health` 共 69）· 30 張業務資料表 · 24 條前端路由（22 靜態 ＋ 2 動態，v2.3.5 多了分頁圖示 `/icon.svg`）|
@@ -196,6 +196,18 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
 
+### v2.3.7（2026-10-15）— 上線設定：API 改用子網域 `api.everevo.com.tw`
+
+v2.3.5 的設計是前台與 API 同網域、由 Cloudflare Tunnel 依路徑（`/api`）分流。上線前查 Cloudflare 官方文件：
+路徑規則只在「設定檔管理」的 Tunnel 明確支援；我們用的「後台管理」Tunnel，現行表單只確定有子網域、網域、服務網址三欄。
+為了不讓上線卡在後台有沒有路徑欄位，改成**一個網址對一個服務**：`everevo.com.tw`、`www` → frontend，`api` → backend。
+
+- `infra/deploy_prod.sh`：`NEXT_PUBLIC_API_URL=https://api.everevo.com.tw`；驗證改打 `api` 的 `/health`，並新增 CORS 預檢檢查
+- `DEPLOYMENT.md` 路由表改為三條子網域；Cloudflare 後台選單更新為現行名稱（Networking → Tunnels → Routes → Published application）
+- 程式邏輯不變：跨子網域呼叫靠既有的 `CORS_ORIGINS`。以正式設定（`ENVIRONMENT=production`）實測預檢：
+  `https://everevo.com.tw`、`https://www.everevo.com.tw` → 200 並回 `Access-Control-Allow-Origin`；其他來源 → 400
+- `bash -n infra/deploy_prod.sh` 語法檢查通過；⚠️ 實際上線仍未驗證
+
 ### v2.3.6（2026-10-15）— AI 快速估價：材料費沒算、片數被忽略、結果數字空白
 
 使用者在正式站按「計算報價」回報「沒反應」。實際是 v2.0 起就存在的三個 bug：
@@ -280,7 +292,7 @@ reportlab 的 `Paragraph` 會解析標記，品牌名裡的 `&` 寫成 `&amp;`�
 - 報價單 PDF：實際產生並轉圖確認抬頭（中文字型可顯示 陛、實）。
 - ⚠️ **未驗證**：真實 DB＋HTTP（等使用者本機 Docker）；`docker compose config` 解析兩個 compose 檔
   （VM 沒有 docker，部署腳本會在主機上檢查）；Compose 從 `.env` 讀 `COMPOSE_FILE`（腳本在重建前檢查，沒讀到就中止）；
-  Cloudflare 路由的路徑正規式 `^/(api/|health$)`（部署腳本最後打公開網址 `/health` 驗證）；正式站實際上線。
+  Cloudflare 路由（v2.3.7 改為 API 子網域，部署腳本最後打公開網址驗證）；正式站實際上線。
 
 #### 發現但不在這版處理
 
