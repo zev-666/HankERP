@@ -53,7 +53,7 @@ export default function InventoryPage() {
           {tab === "balance" && (
             <table className="w-full text-sm">
               <thead><tr className="border-b border-slate-100">
-                <th className="text-left py-2 px-3 text-xs text-slate-500">物料ID</th>
+                <th className="text-left py-2 px-3 text-xs text-slate-500">品項（ID 末 8 碼）</th>
                 <th className="text-left py-2 px-3 text-xs text-slate-500">倉庫</th>
                 <th className="text-right py-2 px-3 text-xs text-slate-500">庫存量</th>
                 <th className="text-right py-2 px-3 text-xs text-slate-500">保留量</th>
@@ -62,7 +62,14 @@ export default function InventoryPage() {
               <tbody>
                 {(balances?.data || []).map((b: any) => (
                   <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50">
-                    <td className="py-2 px-3 font-mono text-xs text-slate-600">{b.material_id.slice(-8)}</td>
+                    <td className="py-2 px-3 text-xs text-slate-600">
+                      {/* v2.3.3：成品（FG 倉）的 material_id 是 null，改看 product_id；原本直接 .slice() 會讓整頁當掉 */}
+                      {b.material_id ? (
+                        <><span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded mr-1.5">原料</span><span className="font-mono">{String(b.material_id).slice(-8)}</span></>
+                      ) : b.product_id ? (
+                        <><span className="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded mr-1.5">成品</span><span className="font-mono">{String(b.product_id).slice(-8)}</span></>
+                      ) : "—"}
+                    </td>
                     <td className="py-2 px-3"><span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded">{b.warehouse_code}</span></td>
                     <td className="py-2 px-3 text-right">{b.qty_on_hand}</td>
                     <td className="py-2 px-3 text-right text-amber-600">{b.qty_reserved}</td>

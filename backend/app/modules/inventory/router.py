@@ -23,7 +23,30 @@ async def get_balances(
     current_user: User = Depends(get_current_user),
 ):
     items = await svc.get_balances(db, current_user.tenant_id, warehouse_code, material_id)
-    return {"success": True, "data": items, "total": len(items)}
+    return {"success": True, "data": [_balance_row(b) for b in items], "total": len(items)}
+
+
+def _balance_row(b) -> dict:
+    """
+    v2.3.3：明確列出回傳欄位。
+
+    先前直接回傳 ORM 物件，FastAPI 轉 JSON 時只帶出資料庫欄位，
+    `qty_available` 是模型上的 @property（庫存量 − 保留量）不會出現，
+    前端「可用量」整欄空白。這裡保留原本每個欄位的型別（數量為數字、ID 為字串），
+    只補上 qty_available，避免影響既有使用者（例如 scripts/verify_e2e.py）。
+    """
+    return {
+        "id": str(b.id),
+        "tenant_id": str(b.tenant_id) if b.tenant_id else None,
+        "material_id": str(b.material_id) if b.material_id else None,
+        "product_id": str(b.product_id) if b.product_id else None,
+        "warehouse_code": b.warehouse_code,
+        "location_code": b.location_code,
+        "qty_on_hand": float(b.qty_on_hand or 0),
+        "qty_reserved": float(b.qty_reserved or 0),
+        "qty_available": float((b.qty_on_hand or 0) - (b.qty_reserved or 0)),
+        "last_updated": b.last_updated.isoformat() if b.last_updated else None,
+    }
 
 @router.post("/receipt", summary="入庫登記")
 async def receipt(
