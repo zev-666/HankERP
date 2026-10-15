@@ -101,6 +101,10 @@ Model (SQLAlchemy) → Schema (Pydantic) → Service → Router → Alembic migr
 - 公開端點（`/api/v1/public/*`）必須套 `@limiter.limit(...)`，且不得接受前端傳入 `tenant_id`
 - 回傳統一為 `{"success": bool, "data": ..., "message": ...}`
 - 改動 Model 一定要同步新增 Alembic migration，**不要用 autogenerate 後直接交付，要讀過內容**
+- **新增 `APIRouter(...)` 一定要帶 `route_class=CommitBeforeResponseRoute`**（`app/db_commit_route.py`）。
+  漏加的話寫入會在回應之後才 commit，前端連續操作會讀不到剛存的資料；`tests/test_commit_before_response.py` 會擋
+- Service／Router 只 `flush()`，**不要自己 commit，也不要在 `get_db` 裡加回 commit**（原因見 README v2.3.2）。
+  要讓寫入失敗就 `raise HTTPException`；回傳 4xx 的 Response 也會 rollback
 
 ### 前端開發順序
 
@@ -162,3 +166,4 @@ cd ../frontend && npm run build && npm run lint && npm audit
 - 密碼重設 token 存在記憶體字典，重啟即失效
 - `ezdxf` / `pymupdf` / `pillow` 已在 requirements 但無任何程式碼使用
 - `docker compose up` 完整流程尚未在能連 Docker Hub 的環境驗證過
+- `_next_wo_number` 不分租戶計數、且同時建工單可能撞號（v2.3.2 發現，未修）

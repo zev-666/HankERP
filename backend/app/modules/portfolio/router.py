@@ -9,14 +9,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
 from app.models.portfolio import PortfolioCase
 from app.rate_limit import limiter
 
-router = APIRouter(prefix="/api/v1/portfolio", tags=["作品展示系統"])
-public_router = APIRouter(prefix="/api/v1/public/portfolio", tags=["官網公開API"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/portfolio", tags=["作品展示系統"])
+public_router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/public/portfolio", tags=["官網公開API"])
 
 class PortfolioCreate(BaseModel):
     title: str

@@ -130,6 +130,19 @@ bom = call("POST", "/api/v1/bom", {
 bom_id = bom.get("bom_id") or bom["data"]["id"]
 call("POST", f"/api/v1/bom/{bom_id}/approve")
 
+# v2.3.2 診斷：CI #8 在下一步倒在「工單建好但備料清單是空的」，而 CI #5、#6
+# 的同類失敗（完工入庫查不到 FG 庫存／工序都完成卻說沒完成）當時完全沒有線索。
+# 這三次都是「前一個請求寫入成功，下一個請求讀不到」。這裡先把 bom_items 讀回來，
+# 把問題切成「BOM 明細沒落庫」還是「工單展不開」兩段。
+# 用 /expand 而不是 /products/{id}/bom——後者回傳 ORM 物件，items 是 lazy 關聯，
+# 序列化時不會出現在 JSON 裡，拿它判斷會永遠是 0。
+expanded = call("GET", f"/api/v1/bom/{bom_id}/expand")
+bom_items_back = expanded.get("items") or []
+print(f"      → 回讀 bom_items：{len(bom_items_back)} 項")
+if len(bom_items_back) != 1:
+    print(f"       ⚠ 預期 1 項，實際 {len(bom_items_back)} 項。完整回應：{expanded}")
+    FAILS.append(f"BOM 明細回讀數不符：{len(bom_items_back)}")
+
 print("\n6. 建立工單（數量10 → 備料需求 2*10*1.1 = 22才）")
 wo = call("POST", "/api/v1/work-orders", {
     "product_id": prod_id, "bom_id": bom_id, "quantity": 10, "priority": 3,
@@ -138,7 +151,20 @@ wo = call("POST", "/api/v1/work-orders", {
 })
 wo_id = wo["wo_id"]
 plan = call("GET", f"/api/v1/work-orders/{wo_id}/material-plan")
-need = plan["data"][0]["planned_qty"]
+rows = plan.get("data") or []
+if not rows:
+    # 不要讓 IndexError 蓋掉真正的狀態；把兩邊的回應都印出來再結束。
+    print(f"       ✗ 備料清單是空的。")
+    print(f"         建立工單回應：{wo}")
+    print(f"         material-plan 回應：{plan}")
+    print(f"         bom_items 回讀數：{len(bom_items_back)}（bom_id={bom_id}）")
+    FAILS.append("工單建立成功但備料清單為空")
+    print("\n" + "=" * 70)
+    print(f"❌ {len(FAILS)} 項失敗：")
+    for f in FAILS:
+        print("   " + f)
+    sys.exit(1)
+need = rows[0]["planned_qty"]
 print(f"      → 備料需求 {need} 才（BOM 2才 × 10台 × 1.1損耗）")
 assert abs(need - 22.0) < 0.001, f"備料計算錯誤：{need}"
 

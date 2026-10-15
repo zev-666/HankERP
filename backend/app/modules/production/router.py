@@ -2,16 +2,21 @@ from uuid import UUID
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
-from app.modules.production.service import ProductionService, InsufficientStockError
+from app.modules.production.service import (
+    EmptyMaterialPlanError,
+    InsufficientStockError,
+    ProductionService,
+)
 from app.modules.production.schemas import (
     WorkOrderCreate, WorkOrderOut, OperationReportIn,
     MaterialIssueIn, WorkOrderCompleteIn,
 )
 
-router = APIRouter(prefix="/api/v1/work-orders", tags=["生產工單"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/work-orders", tags=["生產工單"])
 svc = ProductionService()
 
 @router.post("", summary="建立工單")
@@ -20,7 +25,11 @@ async def create_wo(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    wo = await svc.create_work_order(db, current_user.tenant_id, current_user.id, data)
+    try:
+        wo = await svc.create_work_order(db, current_user.tenant_id, current_user.id, data)
+    except EmptyMaterialPlanError as e:
+        # v2.3.2：指定了 BOM 卻展不出備料明細 → 400，不再靜默建立沒有料的工單
+        raise HTTPException(400, {"message": "指定的 BOM 展不出備料明細，工單未建立", **e.detail})
     return {"success": True, "wo_number": wo.wo_number, "wo_id": str(wo.id),
             "message": "工單建立成功，狀態為草稿，請確認後發佈"}
 

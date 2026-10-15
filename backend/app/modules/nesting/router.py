@@ -1,6 +1,7 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
@@ -11,7 +12,7 @@ from app.modules.nesting.schemas import (
 from app.modules.nesting.service import ENGINE_VERSION, compare_presets, run_nesting
 from sqlalchemy import select
 
-router = APIRouter(prefix="/api/v1/nesting", tags=["裁切最佳化"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/nesting", tags=["裁切最佳化"])
 
 @router.post("/compare-presets", response_model=PresetCompareResponse, summary="比較9種板型，找出最省片數的方案")
 async def compare_presets_endpoint(

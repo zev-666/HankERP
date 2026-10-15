@@ -16,6 +16,23 @@ class InsufficientStockError(Exception):
         self.shortages = shortages
         super().__init__("庫存不足，無法發料")
 
+
+class EmptyMaterialPlanError(Exception):
+    """
+    指定了 BOM 卻展不出任何備料明細。
+
+    v2.3.2：先前這是**靜默**行為——`create_work_order` 查不到 `bom_items` 就
+    直接跳過，工單照樣建立並回 200，現場拿到的是一張沒有備料清單的工單。
+    CI #8 的端到端驗證就是倒在這裡（工單 200、material-plan 回傳空陣列），
+    而且因為沒有任何錯誤訊息，前兩次（CI #5、#6）的同類失敗都查不出原因。
+
+    `detail` 帶回實際查到的狀態，讓錯誤訊息自己說明是哪一段斷掉。
+    """
+
+    def __init__(self, detail: dict):
+        self.detail = detail
+        super().__init__("指定的 BOM 展不出備料明細")
+
 async def _next_wo_number(db: AsyncSession) -> str:
     year = date.today().year
     q = select(func.count(WorkOrder.id)).where(WorkOrder.wo_number.like(f"WO{year}-%"))
@@ -59,6 +76,23 @@ class ProductionService:
             bom_q = select(BomItem).where(BomItem.bom_id == data.bom_id)
             result = await db.execute(bom_q)
             bom_items = result.scalars().all()
+
+            # v2.3.2：展不出備料明細就直接失敗，不再靜默建立一張沒有料的工單。
+            # 指定了 bom_id 卻零明細，代表上游有問題（BOM 根本不存在、或建立時
+            # items 沒落庫），這種狀況讓它在建立工單時就擋下來，而不是等到
+            # 現場要發料才發現沒料可發。
+            if not bom_items:
+                bom_exists = (await db.execute(
+                    select(func.count(BomHeader.id)).where(BomHeader.id == data.bom_id)
+                )).scalar() or 0
+                raise EmptyMaterialPlanError({
+                    "bom_id": str(data.bom_id),
+                    "bom_header_found": bool(bom_exists),
+                    "bom_item_count": 0,
+                    "hint": ("BOM 主檔不存在，請確認 bom_id" if not bom_exists
+                             else "BOM 主檔存在但沒有任何明細，請檢查建立 BOM 時 items 是否正確寫入"),
+                })
+
             for item in bom_items:
                 planned_qty = item.quantity * data.quantity * (1 + item.wastage_rate)
                 issue = WoMaterialIssue(

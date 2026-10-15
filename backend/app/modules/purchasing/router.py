@@ -4,6 +4,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
@@ -12,7 +13,7 @@ from app.modules.purchasing.schemas import PurchaseOrderCreate, ReceiveItemIn
 from app.modules.inventory.service import InventoryService
 from app.modules.inventory.schemas import TransactionCreate, SheetStockCreate
 
-router = APIRouter(prefix="/api/v1/purchase-orders", tags=["採購管理"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/purchase-orders", tags=["採購管理"])
 inv_svc = InventoryService()
 
 async def _next_po_number(db: AsyncSession) -> str:

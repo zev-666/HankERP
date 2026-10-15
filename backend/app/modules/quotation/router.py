@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 import io
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
@@ -15,7 +16,7 @@ from app.ai.quote_engine import QuoteEngine
 from app.modules.quotation.pdf_export import generate_quotation_pdf
 import uuid as uuid_mod
 
-router = APIRouter(prefix="/api/v1/quotations", tags=["報價管理"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/quotations", tags=["報價管理"])
 
 async def _next_quote_number(db: AsyncSession) -> str:
     year = date.today().year

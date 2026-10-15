@@ -164,6 +164,9 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
    不利分享與 SEO；若在意可改為 ASCII slug ＋ 短碼。詳見 v2.0 紀錄裡的相關 bug。
 9. 詢價目前無 email 通知，業務需自行進後台查看；接上 SMTP 或 LINE Notify 是下一個高性價比項目
 10. 安全庫存預警、庫存盤點報表、供應商比價、報價轉銷售訂單仍未實作（見 `MVP_CHECKLIST.md`）
+11. `production/service.py` 的 `_next_wo_number` 以「全資料庫」計數產生工單號，沒有依 `tenant_id`
+    過濾，多租戶時編號會互相影響；且兩個請求同時建工單可能拿到同一個號碼。單租戶上線前不影響，
+    開第二個租戶前必須處理（v2.3.2 排查時發現，未修）
 
 ## ⚠️ 儲存庫可見性
 
@@ -188,6 +191,88 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > v1.0–v1.9 的交付物為 `acrylic-erp-verified.zip`；**v2.0 起改以 git 儲存庫
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
+
+### v2.3.2（2026-10-15）— 修正「回 200 時資料還沒 commit」：所有寫入端點的交易邊界
+
+#### 問題
+
+CI #5、#6、#8 三次偶發失敗都是同一個家族——**前一個請求回報成功，下一個請求讀不到**：
+工序都報工完成卻說「尚有工序未完成」、完工入庫回 200 但 FG 倉是空的、工單建立回 200
+但備料清單是空陣列。每次都只在 CI 出現，本機單跑重現不出來，重跑就綠。
+
+#### 根因（三層證據，2026-10-15 本機 Docker 實測）
+
+`get_db` 把 `await session.commit()` 寫在 `yield` 之後，而端點本身只 `flush()`。
+**FastAPI 0.135 的 `yield` 相依是在 HTTP 回應送出之後才退棧的**
+（`fastapi/routing.py` 的 `request_response`：`await response(scope, receive, send)`
+在 `request_stack` 的 `async with` 裡面，`request_stack` 結束才跑相依收尾）。
+所以順序是「flush → 回 200 → 才 commit」，下一個請求只要貼得夠近就讀不到。
+
+1. **量測**：新增 `scripts/repro_bom_wo.py`，連續 200 輪「建料→建產品→建 BOM→回讀明細→建工單→查備料」，
+   請求間隔 0ms 時 **195/200 失敗**（500 = `bom_headers_product_id_fkey` 外鍵查不到剛建的產品；
+   或 `expand` 404 查不到剛建的 BOM）。事後查資料庫：失敗輪次的物料、產品 **200/200 都在**——
+   資料沒有遺失，只是 commit 晚到。請求間隔拉到 300ms 則 **30/30 通過**。
+2. **現場時序**：在 `get_db` 暫時加時間戳，`COMMIT-start` 一律出現在 uvicorn access log
+   （`200 OK`）之後；`POST /bom` 開 session 的時間比 `POST /products` 的 `COMMIT-done` 早 2.4ms。
+   同時確認每個請求只開一個 session（`enforce_permissions` 與路由共用），排除「兩個獨立交易」。
+3. **原始碼**：讀 FastAPI 0.135.0 的 `routing.py` 確認上述退棧順序，以及 `include_router`
+   會保留來源 router 的 route class（`route_class_override=type(route)`）。
+
+只有 `auth/router.py` 自己顯式 commit，所以登入一直正常；其餘 36 個寫入端點全部受影響。
+
+> 排查過程中我曾兩度判斷錯誤，記錄在此避免重蹈：
+> (a) 一度以為 `/health` 回 404 代表重現腳本沒打到容器——實際上腳本在容器內執行，
+> 它的 `127.0.0.1` 就是 backend；404 來自主機上另一支無關的 `python -m app.server`
+> 佔用了主機的 `127.0.0.1:8000`。
+> (b) 一度拿 `Select-String -Context 0,12` 過濾後的 log 當 traceback 讀，誤把交錯的行
+> 當成「commit 在 AsyncExitStackMiddleware 裡執行」的證據。結論方向碰巧對，但證據是假的；
+> 最後以未過濾的時間戳 log 與 FastAPI 原始碼重新證明。
+
+#### 修正
+
+- 新增 `app/db_commit_route.py`：`CommitBeforeResponseRoute(APIRoute)`。路由處理函式在
+  `function_stack` 內執行、早於 `await response(...)`，所以在拿到 Response 之後、回傳之前 commit，
+  保證「回 2xx 時資料已落庫」。回應狀態碼 ≥ 400 時改為 rollback。
+- `app/database.py`：`get_db` **不再 commit**，只把 session 掛到 `request.state.db`、出錯時
+  rollback、最後關閉。
+- 14 個 `APIRouter(...)` 全部加上 `route_class=CommitBeforeResponseRoute`
+  （`include_router` 保留來源 route class，只設 `app.router` 無效）。
+- 順帶修正：**舊版端點只要「回傳」4xx 而不是 raise，寫到一半的東西照樣 commit**。新版會 rollback。
+- 順帶修正（同一失敗家族）：`create_work_order` 指定 BOM 卻展不出任何明細時，原本默默建出一張
+  沒有備料清單的工單並回 200；現在丟 `EmptyMaterialPlanError`，router 回 **400**，並在 detail 說明
+  是「BOM 主檔不存在」還是「主檔在但沒有明細」。
+- `scripts/verify_e2e.py`：建 BOM 後回讀明細；備料清單為空時印出完整狀態再結束，不再被 IndexError 蓋掉。
+
+#### 怎麼驗證
+
+| 驗證 | 修正前 | 修正後 |
+|---|---|---|
+| `repro_bom_wo.py 200 0`（真實 PostgreSQL ＋ HTTP，間隔 0ms） | 195/200 失敗 | **200/200**，空 BOM 建工單 → 400 |
+| `verify_rbac.py`（9 角色 × 24 邊界） | — | 全過 |
+| `verify_e2e.py`（13 步端到端） | 偶發失敗 | 全過；回讀 bom_items 1 項、FG 9 台 |
+| `pytest -q` | 200 | **207 passed** |
+
+新增測試 7 項，**每一項都在 git HEAD 的舊程式上實際跑過、確認會失敗**：
+
+- `tests/test_commit_before_response.py`（5 項，不需資料庫）：以記錄事件的假 session ＋
+  ASGI 包裝比較 commit 與 `http.response.start` 的先後。舊程式上 3 項失敗
+  （`['write', 'response-sent', 'commit', 'close']`、回 409 仍 commit、守門）；
+  另 2 項是 FastAPI 行為的特性測試與 raise→rollback，舊新皆過，符合預期。
+  守門測試要求 app 上每一支 `/api/` 路由都是 `CommitBeforeResponseRoute`，
+  新模組忘記加會在 CI 失敗。
+- `tests/test_work_order_empty_bom.py`（2 項）：舊程式上 2 項皆 `DID NOT RAISE`。
+
+端點數、資料表數 **v2.3.2 未變動**（無 migration）。
+
+#### 對既有 ✅ 的影響
+
+過去 `verify_e2e.py` 13/13 通過，是因為步驟之間有足夠間隔、commit 來得及，**不能證明連續操作時
+資料可見**。本版以 0ms 間隔的重現腳本重新驗證寫入路徑後，Phase 3／4／6 相關項目維持 ✅。
+
+#### 同時更正
+
+v2.3 紀錄的「pytest 74 → 147 項」是我把 126＋21 加上去時，忘了 53 項權限測試已經包含在 74 裡；
+2026-09-29 本機實測為 **200 passed**。
 
 ### v2.3（2026-09-29）— 開條裁板引擎取代 BFD，後台裁切系統換心
 
@@ -230,6 +315,7 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 另含不依賴基準的獨立驗證：零重疊、零越界、評分刀數等於刀序表刀數、排入數與未排入數吻合。
 
 pytest 由 74 → **147 項**（新增 126，舊 BFD 引擎的 21 項保留作歷史對照）。
+> **更正（v2.3.2）**：147 是計算錯誤，本機實測為 **200 passed**，見 v2.3.2 紀錄。
 
 #### 與參考版的一處刻意偏離
 

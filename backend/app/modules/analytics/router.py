@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
@@ -11,7 +12,7 @@ from app.models.inventory import InventoryBalance, InventoryTransaction
 from app.models.quotation import Quotation
 from app.models.equipment import Equipment, MaintenanceLog
 
-router = APIRouter(prefix="/api/v1/analytics", tags=["分析報表"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/analytics", tags=["分析報表"])
 
 @router.get("/dashboard", summary="廠長儀表板")
 async def dashboard(

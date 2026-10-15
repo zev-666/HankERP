@@ -1221,6 +1221,19 @@ class QuoteEngine:
 - 不需要新的資料表或 migration：`User.role` 本就是 `lazy="joined"`，
   `Role.permissions` 是既有的 JSON 欄位。
 
+### 交易邊界（v2.3.2）
+
+- **回 2xx 時資料必須已經 commit。** FastAPI 0.135 的 `yield` 相依在回應送出之後才退棧，
+  因此 commit 不能寫在 `get_db` 的 `yield` 之後（v2.3.1 以前就是這樣寫，導致連續請求讀不到
+  上一個請求「已成功」的資料，見 README v2.3.2）。
+- commit 由 `app/db_commit_route.py` 的 `CommitBeforeResponseRoute` 負責：處理函式回傳之後、
+  回應送出之前執行。回應狀態碼 < 400 → commit；≥ 400 → rollback；處理函式 raise → `get_db` rollback。
+- `get_db` 只提供 session（掛在 `request.state.db`）、出錯時 rollback、最後關閉，**不 commit**。
+- Service 與 Router 只做 `flush()`，不自己 commit（`auth/router.py` 既有的顯式 commit 無害，保留）。
+- **每個 `APIRouter(...)` 都必須帶 `route_class=CommitBeforeResponseRoute`**。`include_router`
+  保留來源 router 的 route class，只設 `app.router` 無效。
+  `tests/test_commit_before_response.py` 會檢查每一支 `/api/` 路由，漏加會在 CI 失敗。
+
 ---
 
 ## 十、Claude Code 開發指令（完整版）

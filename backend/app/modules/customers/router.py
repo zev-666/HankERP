@@ -2,6 +2,7 @@ from uuid import UUID
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
@@ -10,7 +11,7 @@ from app.modules.customers.schemas import (
     CustomerCreate, CustomerUpdate, CustomerOut, ActivityCreate
 )
 
-router = APIRouter(prefix="/api/v1/customers", tags=["客戶管理 CRM"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/customers", tags=["客戶管理 CRM"])
 svc = CustomerService()
 
 @router.get("", summary="客戶列表")

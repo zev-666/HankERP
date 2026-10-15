@@ -2,6 +2,7 @@ from uuid import UUID
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
@@ -11,7 +12,7 @@ from app.modules.inventory.schemas import (
     SheetStockOut, InventoryBalanceOut, RemnantCreate
 )
 
-router = APIRouter(prefix="/api/v1/inventory", tags=["庫存管理"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/inventory", tags=["庫存管理"])
 svc = InventoryService()
 
 @router.get("/balance", summary="庫存餘額查詢")

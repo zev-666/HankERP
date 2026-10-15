@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, EmailStr, field_validator
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.models.user import User, Role
 from app.auth.security import verify_password, create_access_token, get_password_hash
@@ -12,7 +13,7 @@ from app.auth.dependencies import get_current_user
 from app.config import settings
 from app.rate_limit import limiter
 
-router = APIRouter(prefix="/api/v1/auth", tags=["認證"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/auth", tags=["認證"])
 
 # 密碼重設token暫存（正式環境建議改用Redis並設定過期時間）
 _reset_tokens: dict[str, dict] = {}

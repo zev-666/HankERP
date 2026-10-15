@@ -6,12 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from decimal import Decimal
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
 from app.models.equipment import Equipment, MaintenanceLog
 
-router = APIRouter(prefix="/api/v1/equipment", tags=["設備管理"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/equipment", tags=["設備管理"])
 
 class EquipmentCreate(BaseModel):
     code: str

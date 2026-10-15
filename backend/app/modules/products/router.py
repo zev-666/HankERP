@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
@@ -12,7 +13,7 @@ from app.modules.products.schemas import (
     ProductCreate, ProductOut, BomCreate, BomOut, MaterialCreate, MaterialOut
 )
 
-router = APIRouter(prefix="/api/v1", tags=["產品與BOM"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1", tags=["產品與BOM"])
 
 # ── Materials ────────────────────────────────────────────────────────
 @router.get("/materials", summary="物料主檔列表")

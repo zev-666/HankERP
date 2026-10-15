@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db_commit_route import CommitBeforeResponseRoute
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User, Tenant
@@ -25,8 +26,8 @@ from app.models.inquiry import Inquiry
 from app.modules.inquiries.schemas import InquiryCreate, InquiryStatusUpdate, VALID_STATUSES
 from app.rate_limit import limiter
 
-router = APIRouter(prefix="/api/v1/inquiries", tags=["線上詢價"])
-public_router = APIRouter(prefix="/api/v1/public/inquiries", tags=["官網公開API"])
+router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/inquiries", tags=["線上詢價"])
+public_router = APIRouter(route_class=CommitBeforeResponseRoute, prefix="/api/v1/public/inquiries", tags=["官網公開API"])
 
 
 def _serialize(i: Inquiry) -> dict:
