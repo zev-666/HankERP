@@ -12,12 +12,12 @@ type Props = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const c = await getPublicCase(slug);
-  if (!c) return { title: "找不到此案例 | 龜山壓克力製造" };
+  if (!c) return { title: "找不到此案例 | 永陛 & 進化 EVEREVO" };
   return {
-    title: `${c.title} | 龜山壓克力製造`,
+    title: `${c.title} | 永陛 & 進化 EVEREVO`,
     description:
       [c.industry, c.product_type, c.dimensions].filter(Boolean).join(" · ") ||
-      `${c.title} — 桃園龜山壓克力展示架製造實績`,
+      `${c.title} — 永陛 & 進化 EVEREVO 壓克力展示架製造實績`,
     openGraph: c.cover_image_url ? { images: [c.cover_image_url] } : undefined,
   };
 }

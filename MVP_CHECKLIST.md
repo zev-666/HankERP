@@ -40,7 +40,12 @@
 > 與 cutplan 10-15 版 JS 引擎 25 案例逐件、逐刀比對 0 不一致；pytest **261 passed**（新增 52 項，
 > 新測試在 v2.3.3 程式上 31 項失敗）。端點數、資料表數、前端路由數未變動。
 >
-> **本清單共 62 項：✅ 43 項（69%）、⚠️ 7 項、❌ 12 項。**
+> **v2.3.5**（2026-10-15）：品牌改為「永陛 & 進化 EVEREVO」；報價單抬頭改為永陛實業有限公司；
+> 限流改以真實訪客 IP 計數（Cloudflare Tunnel 前提）；新增 `docker-compose.prod.yml` 與 `infra/deploy_prod.sh`。
+> pytest **272 passed**（新增 11 項；限流 5 項在舊程式上全部失敗）；前端路由 23 → **24**（`/icon.svg`）。
+> 「域名 + SSL」由 ❌ 改為 ⚠️：程式與設定完成，**正式站尚未實際切換**。
+>
+> **本清單共 62 項：✅ 43 項（69%）、⚠️ 8 項、❌ 11 項。**
 > （v2.3：新增「開條裁板引擎 ＋ 裁切順序」1 項 ✅；「剩料自動入庫」由 ⚠️ 更正為 ❌——
 > 實測 `nesting/router.py` 沒有任何一行寫入 `remnant_inventory`，舊標記是錯的。）
 > （v2.2：「利用率計算」「板材利用率月報」「資料庫自動備份」三項在 CI 與本機取得執行期證據，
@@ -196,7 +201,9 @@
   **仍未完成**：正式主機尚未 `docker compose up -d db-backup` 啟用；
   備份與資料庫在同一台主機，**異地備份尚未設定**（見 `DEPLOYMENT.md`「資料庫備份」）
 - [ ] ❌ AWS Taiwan部署 — 未執行
-- [ ] ❌ 域名 + SSL設定 — 未執行
+- [ ] ⚠️ 域名 + SSL設定 — **v2.3.5** 程式與設定完成：`everevo.com.tw` 走 Cloudflare Tunnel（`docker-compose.prod.yml`
+  不開 port、`infra/deploy_prod.sh`、限流改用 `CF-Connecting-IP`）。**尚未實際上線**：網域待購買、Tunnel 待建立、
+  正式站待切換；切換後以部署腳本的公開網址檢查與瀏覽器實際登入為準
 - [ ] ❌ 使用者培訓文件 — 未撰寫（`README.md`/`CONTRIBUTING.md` 是給開發者的，非給現場人員）
 - [x] ✅ CI 持續整合 — **v2.0 新增** `.github/workflows/ci.yml`：真的起 PostgreSQL 16 ＋ Redis、
   跑 migration ＋ seed ＋ pytest，啟動 uvicorn 後用真實 HTTP 走完詢價與工單全流程，

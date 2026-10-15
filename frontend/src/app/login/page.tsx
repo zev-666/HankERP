@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { useRouter } from "next/navigation";
+import { BrandMark } from "@/components/brand/BrandMark";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -35,8 +36,13 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <div className="text-3xl font-bold text-slate-800">龜山壓克力</div>
-          <div className="text-slate-500 mt-1">智慧工廠 ERP 系統</div>
+          <div className="flex justify-center mb-4">
+            <BrandMark size={56} tone="light" />
+          </div>
+          <div className="text-3xl font-black text-slate-800 tracking-widest">
+            永陛<span className="font-normal text-teal-700 mx-1.5 tracking-normal">&amp;</span>進化
+          </div>
+          <div className="text-slate-500 mt-2 text-xs tracking-[0.4em]">EVEREVO · ERP 系統</div>
         </div>
         <form onSubmit={handleLogin} className="space-y-4">
           {error && (

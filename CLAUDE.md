@@ -99,6 +99,8 @@ Model (SQLAlchemy) → Schema (Pydantic) → Service → Router → Alembic migr
 
 - 每個需登入的端點都要 `Depends(get_current_user)`
 - 公開端點（`/api/v1/public/*`）必須套 `@limiter.limit(...)`，且不得接受前端傳入 `tenant_id`
+- 限流一律用 `app/rate_limit.py` 的共用 `limiter`（以 `client_ip()` 計數）；不要另建 `Limiter`，也不要改回 `get_remote_address`——Cloudflare Tunnel 後面會變成全站共用一個計數（v2.3.5）
+- 正式環境用 `docker-compose.prod.yml`（不開 port）；改 `docker-compose.yml` 的服務或環境變數要同步，`tests/test_compose_prod.py` 會檢查
 - 回傳統一為 `{"success": bool, "data": ..., "message": ...}`
 - 改動 Model 一定要同步新增 Alembic migration，**不要用 autogenerate 後直接交付，要讀過內容**
 - **新增 `APIRouter(...)` 一定要帶 `route_class=CommitBeforeResponseRoute`**（`app/db_commit_route.py`）。

@@ -25,9 +25,9 @@ from app.modules.inquiries.router import router as inquiries_router, public_rout
 # PERMISSION_MAP，採預設拒絕——沒登記的端點一律 403，避免新端點忘記掛權限
 # 卻默默全開。
 app = FastAPI(
-    title="壓克力展示架智慧工廠 ERP API",
+    title="永陛 & 進化 EVEREVO ERP API",
     version="1.0.0",
-    description="桃園龜山複合式壓克力製造商 ERP SaaS 平台",
+    description="永陛 & 進化 EVEREVO 複合式壓克力展示架製造 ERP 平台",
     docs_url=None if settings.is_production else "/docs",
     redoc_url=None if settings.is_production else "/redoc",
     openapi_url=None if settings.is_production else "/openapi.json",

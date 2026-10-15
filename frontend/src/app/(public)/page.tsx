@@ -42,7 +42,7 @@ export default async function HomePage() {
       <header className="site-wrap hero">
         <div className="hero-grid">
           <div>
-            <div className="eyebrow">桃園龜山 · 20 年複合式製程</div>
+            <div className="eyebrow">EVEREVO · 20 年複合式製程</div>
             <h1>
               精度靠機器，
               <br />
@@ -197,7 +197,7 @@ export default async function HomePage() {
           <h2 className="site-h2">老師傅的手，加上算得清楚的帳</h2>
         </div>
         <p className="site-lede" style={{ maxWidth: "62ch", fontSize: 16.5 }}>
-          我們在桃園市龜山區，二十年來做的都是同一件事：把設計圖變成能量產、耐用、準時交貨的展示架。
+          我們在新北市樹林區，二十年來做的都是同一件事：把設計圖變成能量產、耐用、準時交貨的展示架。
           近年我們把工藝背後的流程整個數位化——報價、BOM、庫存、採購、工單、現場報工到裁切排版，
           每一步都留下數據。所以除了「做得出來」，我們也答得出「什麼時候交、為什麼是這個價」。
         </p>

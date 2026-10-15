@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
+import { BrandMark } from "@/components/brand/BrandMark";
 import {
   LayoutDashboard, Users, FileText, Package, ShoppingCart,
   ClipboardList, Scissors, BarChart3, Settings, LogOut, Wrench, Layers,
@@ -34,8 +35,13 @@ export function Sidebar() {
   return (
     <aside className="w-56 min-h-screen bg-slate-900 flex flex-col shrink-0">
       <div className="p-4 border-b border-slate-700">
-        <div className="text-white font-semibold text-sm">龜山壓克力</div>
-        <div className="text-slate-400 text-xs mt-0.5">智慧工廠 ERP</div>
+        <div className="flex items-center gap-2.5">
+          <BrandMark size={28} />
+          <div>
+            <div className="text-white font-semibold text-sm tracking-wider">永陛 &amp; 進化</div>
+            <div className="text-slate-400 text-[10px] mt-0.5 tracking-[0.3em]">EVEREVO ERP</div>
+          </div>
+        </div>
       </div>
       <nav className="flex-1 py-2 overflow-y-auto">
         {NAV.map((item, i) => {

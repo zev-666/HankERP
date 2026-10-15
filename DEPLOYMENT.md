@@ -9,9 +9,81 @@
 |---|---|
 | 主機 | Zeabur × Tencent Cloud Singapore，Ubuntu 24.04 LTS |
 | 規格 | 2 vCPU / 1.9 GB RAM / 40 GB SSD |
-| 對外位址 | `http://43.156.110.76:3000`（前端）、`:8000`（API） |
+| 對外位址 | **v2.3.5 起：`https://everevo.com.tw`**（Cloudflare Tunnel，主機不開任何 port）；之前是 `http://43.156.110.76:3000`／`:8000` |
+| SSH | `ubuntu@43.156.110.76`（仍用 IP） |
 | 專案路徑 | `/home/ubuntu/HankERP` |
-| 容器 | frontend / backend / celery / db / redis，共 5 個 |
+| 容器 | v2.3.5 起用 `docker-compose.prod.yml`：frontend / backend / celery / db / redis / db-backup / cloudflared，共 7 個 |
+| 部署 | `infra/deploy_prod.sh`（見下一節） |
+
+---
+
+## Cloudflare Tunnel 上線（v2.3.5）
+
+```
+訪客 ──HTTPS──▶ Cloudflare ══加密通道══▶ 主機上的 cloudflared 容器 ─┬─▶ frontend:3000
+                                        （由主機主動往外連）        └─▶ backend:8000（/api/*、/health）
+```
+
+前台與 API 在**同一個網域**，由 Tunnel 依路徑分流，所以沒有跨網域問題，也只需要一張憑證（Cloudflare 管）。
+主機不對外開 80／443／3000／8000，IP 被掃到也沒有服務可打。
+
+### 一次性設定（使用者在瀏覽器操作）
+
+1. **買網域** `everevo.com.tw`：.com.tw 要在台灣的註冊商買，用**永陛實業有限公司（統編 12659649）**名義，帳號由公司保管。
+2. **把網域交給 Cloudflare 管 DNS**：Cloudflare → Add a domain → `everevo.com.tw` → Free 方案 →
+   記下 Cloudflare 給的兩組 nameserver → 回註冊商後台把 DNS 伺服器改成這兩組 → 等 Cloudflare 顯示 Active。
+3. **建立 Tunnel**：Cloudflare Zero Trust → Networks → Tunnels → Create a tunnel → 類型 Cloudflared →
+   名稱 `everevo-prod` → 環境選 Docker → 畫面上的指令裡 `--token` 後面那一長串就是 token。
+   **不要複製到任何地方**，部署腳本會請你直接貼在主機上（輸入不顯示）。
+4. **設定路由**（Tunnel 的 Public hostname／Published application routes），**順序很重要，路徑規則放最上面**：
+
+   | # | 子網域 | 網域 | Path | Service |
+   |---|---|---|---|---|
+   | 1 | （空） | everevo.com.tw | `^/(api/|health$)` | HTTP → `backend:8000` |
+   | 2 | （空） | everevo.com.tw | （空） | HTTP → `frontend:3000` |
+   | 3 | www | everevo.com.tw | （空） | HTTP → `frontend:3000` |
+
+   `backend`、`frontend` 是 Docker 內網的服務名稱，cloudflared 容器跟它們在同一個網路，所以這樣寫就連得到。
+5. **www 轉址到主網域**：Rules → Redirect Rules → 用範本「Redirect from WWW to root」。
+   （不轉的話，www 與主網域的登入狀態是分開的。）
+6. **SSL/TLS → Edge Certificates → Always Use HTTPS** 打開。
+
+### 部署（PowerShell）
+
+```powershell
+scp infra/deploy_prod.sh ubuntu@43.156.110.76:deploy_prod.sh
+ssh -t ubuntu@43.156.110.76 bash deploy_prod.sh
+```
+
+腳本會：只讀檢查 → 等你輸入 yes → 備份資料庫 → 請你貼上 token（第一次）→ 把 `.env` 改成正式模式
+（`COMPOSE_FILE=docker-compose.prod.yml`、網址改成網域、`ENVIRONMENT=production`）→ 重建 → migration → 驗證
+（容器內 API 401、`/docs` 已關、主機沒有監聽 3000／8000、公開網址 200）。
+
+**`.env` 設了 `COMPOSE_FILE` 之後，主機上所有 `docker compose` 指令都自動用正式版**（備份、還原、logs 都一樣），
+不要再加 `-f docker-compose.yml`，否則會用開發版把 port 又開出去。
+
+### 部署後
+
+- **騰訊雲安全組**刪掉 3000、8000 的入站規則，只留 22（主機已經不監聽，這是第二道保險）。
+- 瀏覽器開 `https://everevo.com.tw/login` 實際登入、建一筆資料、從官網送一筆詢價。
+
+### 退回 IP 模式
+
+部署腳本最後會印出對應的 `.env` 備份檔名：
+
+```bash
+cp .env.bak-<時間> .env && docker compose -f docker-compose.yml up -d --build --remove-orphans
+```
+
+### 為什麼這樣設計
+
+- **限流**：Tunnel 後所有請求都從 cloudflared 容器進來。v2.3.5 前限流用連線來源 IP，
+  上 Tunnel 會變成全站共用一個計數（任何人登入錯 5 次，所有人被鎖）。現在正式版設
+  `TRUST_CF_CONNECTING_IP=true`，改用 Cloudflare 帶來的真實訪客 IP。
+  **這只在「後端不對外開 port」時安全**——能直接連到後端的人可以偽造這個標頭。開發版預設不信任。
+- **HSTS** 先用 1 天（`next.config.js`），穩定一個月後再拉長；一開始就設 2 年＋preload，設定出錯無法回頭。
+- **官網伺服器端**抓作品案例走 `INTERNAL_API_URL=http://backend:8000`，不繞外網。
+- `docker-compose.prod.yml` 是獨立檔案，`backend/tests/test_compose_prod.py` 檢查它與開發版同步、且沒有開 port。
 
 ---
 
@@ -219,10 +291,10 @@ curl.exe http://43.156.110.76:8000/health
 
 ## 目前已知的未完成項目
 
-- [ ] **沒有網域、沒有 SSL** —— 現在是 `http://IP:port`，瀏覽器顯示「不安全」
-- [ ] **backend 仍在跑 `--reload`**（開發模式旗標），且掛著 `./backend:/app` bind mount。
-      功能正常，但不是正式環境該有的設定，之後應比照前端處理
-- [ ] **8000 port 直接對外曝露** —— 之後應該用反向代理（Caddy / nginx）只開 443
+- [x] ~~沒有網域、沒有 SSL~~ → v2.3.5 `https://everevo.com.tw`（Cloudflare Tunnel）
+- [x] ~~backend 仍在跑 `--reload` 與 bind mount~~ → v2.3.5 `docker-compose.prod.yml` 已移除
+- [x] ~~8000 port 直接對外曝露~~ → v2.3.5 不開任何 port；騰訊雲安全組的 3000／8000 規則仍需使用者刪除
+- [ ] SSH 仍是密碼登入、22 port 對全網開放 —— 應改金鑰登入並限制來源（Should）
 - [x] ~~資料庫沒有備份機制~~ → v2.1 新增 `db-backup` 容器（見下方「資料庫備份」）。**異地備份仍未設定**
 - [ ] 資料庫裡有 `verify_e2e.py` 產生的測試資料（王大明詢價、客戶 C0001、工單 WO2026-0001）。
       正式交付給工廠前要清掉
@@ -266,6 +338,9 @@ scp "ubuntu@43.156.110.76:/home/ubuntu/HankERP/backups/$f" .
 
 ## 換網域 / 加 SSL 時的檢查清單
 
-1. 改 `.env` 的 `CORS_ORIGINS` 與 `NEXT_PUBLIC_API_URL`
+（v2.3.5 起由 `infra/deploy_prod.sh` 處理；網域寫在腳本最上方的 `DOMAIN`。）
+
+1. 改 `.env` 的 `CORS_ORIGINS`、`NEXT_PUBLIC_API_URL`、`NEXT_PUBLIC_SITE_URL`
 2. **`docker compose up -d --build frontend`** —— 不是 `restart`（見本文件第一節）
-3. 重跑上面三層驗證，尤其第三層
+3. Cloudflare Tunnel 的 Public hostname 加上新網域（兩條：`/api`、`/health` → backend，其餘 → frontend）
+4. 重跑上面三層驗證，尤其第三層

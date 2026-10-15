@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandMark } from "@/components/brand/BrandMark";
 
 const NAV = [
   { href: "/#process", label: "製造工法" },
@@ -11,9 +12,12 @@ export function SiteHeader() {
   return (
     <nav className="site-nav">
       <div className="site-wrap site-nav-in">
-        <Link className="brand" href="/">
-          <b>龜山壓克力</b>
-          <span>GUISHAN ACRYLIC</span>
+        <Link className="brand" href="/" aria-label="永陛 & 進化 EVEREVO 首頁">
+          <BrandMark size={28} />
+          <b>
+            永陛<i>&amp;</i>進化
+          </b>
+          <span>EVEREVO</span>
         </Link>
         <div className="site-links">
           {NAV.map((n) => (
@@ -34,7 +38,9 @@ export function SiteFooter() {
   return (
     <footer className="site-foot">
       <div className="site-wrap site-foot-in">
-        <span>© {new Date().getFullYear()} 龜山壓克力製造 · 桃園市龜山區</span>
+        <span>
+          © {new Date().getFullYear()} 永陛 &amp; 進化 EVEREVO · 永陛實業有限公司 · 新北市樹林區三俊街65巷13號 · 02-2297-3956
+        </span>
         <span style={{ display: "flex", gap: 20 }}>
           <Link href="/portfolio">作品案例</Link>
           <Link href="/about">關於我們</Link>

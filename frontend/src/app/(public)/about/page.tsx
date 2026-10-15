@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import { SiteHeader, SiteFooter } from "@/components/site/SiteHeader";
 
 export const metadata: Metadata = {
-  title: "關於我們 | 龜山壓克力製造",
+  title: "關於我們 | 永陛 & 進化 EVEREVO",
   description:
-    "桃園龜山 20 年複合式壓克力製造商 — CNC、CO₂雷射、大裁板機、電腦裁板機、圓聚切割機等設備與製程介紹。",
+    "永陛 & 進化 EVEREVO — 新北樹林 20 年複合式壓克力製造商 — CNC、CO₂雷射、大裁板機、電腦裁板機、圓聚切割機等設備與製程介紹。",
 };
 
 const CAPABILITIES = [
@@ -35,7 +35,7 @@ export default function AboutPage() {
         </div>
         <div className="prose">
           <p>
-            我們位於桃園市龜山區，是一家擁有二十年以上經驗的複合式壓克力展示架製造商。
+            永陛 & 進化（EVEREVO）位於新北市樹林區，是一家擁有二十年以上經驗的複合式壓克力展示架製造商。
             從彩妝品牌的櫃檯陳列架、酒商的高透光展示櫃、國際家電品牌的產品展示座，
             到零售通路的大型尿布架，我們的專長是把設計圖變成可量產、耐用、準時交貨的實體展示架。
           </p>

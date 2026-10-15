@@ -8,6 +8,14 @@
  */
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+/**
+ * 伺服器端（Server Component）抓資料用的網址（v2.3.5）。
+ * 正式站 docker-compose.prod.yml 設成 http://backend:8000：走 Docker 內網，
+ * 不必繞到外網、經過 Cloudflare 再回到同一台主機。沒設就跟瀏覽器用同一個網址。
+ * 只在 getJson（伺服器端）使用；瀏覽器端（詢價表單）仍用 PUBLIC_API_BASE。
+ */
+const SERVER_BASE_URL = process.env.INTERNAL_API_URL || BASE_URL;
+
 export type PortfolioCase = {
   title: string;
   slug: string;
@@ -28,7 +36,7 @@ export type PortfolioDetail = PortfolioCase & {
 
 async function getJson<T>(path: string, fallback: T): Promise<T> {
   try {
-    const res = await fetch(`${BASE_URL}${path}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${SERVER_BASE_URL}${path}`, { next: { revalidate: 60 } });
     if (!res.ok) return fallback;
     const json = await res.json();
     return (json.data ?? fallback) as T;

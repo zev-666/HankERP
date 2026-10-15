@@ -196,7 +196,10 @@ async def seed():
             print(f"   管理員帳號: {ADMIN_EMAIL}")
             return
 
-        tenant = Tenant(id=uuid.uuid4(), name="龜山壓克力製造", slug="guishan-acrylic")
+        # 名稱只影響「全新安裝」；既有資料庫的租戶列刻意不改（畫面不顯示租戶名）。
+        # slug 與 ADMIN_EMAIL 是內部識別碼，不可隨品牌改名：上方的冪等檢查用 slug 找既有租戶，
+        # 改了會讓正式站重跑 seed 時多建一個租戶。
+        tenant = Tenant(id=uuid.uuid4(), name="永陛實業有限公司", slug="guishan-acrylic")
         db.add(tenant)
         await db.flush()
 

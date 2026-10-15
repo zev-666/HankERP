@@ -1239,6 +1239,16 @@ class QuoteEngine:
   保留來源 router 的 route class，只設 `app.router` 無效。
   `tests/test_commit_before_response.py` 會檢查每一支 `/api/` 路由，漏加會在 CI 失敗。
 
+### 品牌與正式環境（v2.3.5）
+
+- 對外品牌「永陛 & 進化」，英文 **EVEREVO**；報價單開立公司為**永陛實業有限公司**（統編 12659649，
+  新北市樹林區三俊街65巷13號）。品牌可兩家合用，報價單的公司與統編只能是實際開票的一家。
+- `HankERP`、租戶 slug `guishan-acrylic`、資料庫名 `acrylic_erp` 是內部識別碼，不隨品牌改名。
+- 正式站 `https://everevo.com.tw`：Cloudflare Tunnel → 同一網域依路徑分流（`/api/*`、`/health` → backend，其餘 → frontend）。
+  正式版 compose（`docker-compose.prod.yml`）**不對外開任何 port**。
+- 限流以 `app/rate_limit.py` 的 `client_ip()` 計數：`TRUST_CF_CONNECTING_IP=true` 時用 `CF-Connecting-IP`，
+  否則用連線來源位址。**只有後端不對外開 port 時才可設 true**（標頭可偽造）；預設 false。
+
 ---
 
 ## 十、Claude Code 開發指令（完整版）

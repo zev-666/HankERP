@@ -1,14 +1,16 @@
-# HankERP — 壓克力展示架智慧工廠 ERP
+# HankERP — 永陛 & 進化 EVEREVO 壓克力展示架 ERP
 
-桃園龜山複合式壓克力製造商（壓克力＋木工＋鐵件＋LED＋噴漆）的數位轉型 ERP 系統。
+**永陛 & 進化（EVEREVO）** 複合式壓克力展示架製造（壓克力＋木工＋鐵件＋LED＋噴漆）的官網與 ERP 系統。
+報價單開立公司：永陛實業有限公司（統編 12659649）。正式站：`https://everevo.com.tw`（v2.3.5 起，Cloudflare Tunnel）。
+`HankERP` 是內部專案代號（repo、主機路徑、資料庫名稱沿用，不隨品牌改名）。
 涵蓋官網、CRM、報價、BOM、庫存、採購、生產工單、MES 現場報工、裁切最佳化與成本分析。
 
 | | |
 |---|---|
-| **目前版本** | v2.1（2026-09-23，穩固系統第一輪：利用率修正、資料庫備份、公開端點限流） |
+| **目前版本** | v2.3.5（2026-10-15，品牌改為永陛 & 進化 EVEREVO；Cloudflare Tunnel 上線設定） |
 | **後端** | FastAPI 0.135 + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL 15/16 + Celery + Redis |
 | **前端** | Next.js 16.3.5 + Tailwind CSS + TanStack Query + Zustand + Recharts |
-| **實測規模** | 13 個業務模組 · 68 個業務 API 端點（＋`/health` 共 69）· 30 張業務資料表 · 23 條前端路由（21 靜態 ＋ 2 動態）|
+| **實測規模** | 13 個業務模組 · 68 個業務 API 端點（＋`/health` 共 69）· 30 張業務資料表 · 24 條前端路由（22 靜態 ＋ 2 動態，v2.3.5 多了分頁圖示 `/icon.svg`）|
 
 > 上列數字全部是量出來的，不是抄的：端點數讀真實啟動後的 `/openapi.json`，
 > 頁面數讀真實 `npm run build` 的 Route 表，資料表數查真實 PostgreSQL 的
@@ -193,6 +195,75 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > v1.0–v1.9 的交付物為 `acrylic-erp-verified.zip`；**v2.0 起改以 git 儲存庫
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
+
+### v2.3.5（2026-10-15）— 品牌改為「永陛 & 進化 EVEREVO」；Cloudflare Tunnel 上線設定
+
+客戶公司定名「永陛 & 進化」（永陛實業＋進化壓克力，同一位老闆），英文 **EVEREVO**（Ever＋Evolution）。
+網域 `everevo.com.tw`（.com.tw，以永陛實業名義申請）；上線方式選 Cloudflare Tunnel。
+
+#### 1. 改名與標誌（使用者看得到的地方）
+
+- 官網頁首／頁尾、各頁標題、登入頁、ERP 側欄、API 文件標題全部改為「永陛 & 進化 EVEREVO」。
+  `&` 用半形並以細體英文字型（Sora）上強調色；中文字距加寬。
+- 新增標誌元件 `frontend/src/components/brand/BrandMark.tsx`（定案方案 C「雙片疊合」：
+  兩片壓克力錯位疊合，左片永陛、右片進化，重疊處最亮）與分頁圖示 `frontend/src/app/icon.svg`。
+- 地點文案：使用者確認地址為**新北市樹林區三俊街65巷13號**，官網「桃園市龜山區」改為「新北市樹林區」。
+- **刻意不改**：repo 名、主機路徑、資料庫名、租戶 slug `guishan-acrylic`、管理員帳號 email。
+  `seed_data.py` 的冪等檢查用 slug 找既有租戶，改 slug 會讓正式站重跑 seed 時多建一個租戶。
+  新安裝的租戶名稱改為「永陛實業有限公司」，既有資料庫不動（畫面不顯示租戶名）。
+
+#### 2. 報價單 PDF 抬頭
+
+原本是 `龜山壓克力製造有限公司`、統編 `00000000`、電話 `(03) 000-0000` 的佔位資料。
+改為品牌列「永陛 & 進化 EVEREVO」＋法定開立公司「永陛實業有限公司 YONG BE INDUSTRIAL CO., LTD.」、
+統編 12659649、地址、電話、傳真（使用者提供的商工登記資料）。
+品牌可以兩家合用，**報價單的公司與統編只能是實際開票的那一家**；若日後進化壓克力也要開報價，
+需加「開立公司」欄位（資料表＋migration），不能只改常數。
+reportlab 的 `Paragraph` 會解析標記，品牌名裡的 `&` 寫成 `&amp;`。
+
+#### 3. 限流在 Tunnel 後面會變成全站共用一個計數（上線前必修，Must Have）
+
+上 Tunnel 後所有請求都從 cloudflared 容器進來，`get_remote_address` 取到的來源 IP 全部相同：
+任何人登入錯 5 次，所有人被鎖 1 分鐘；官網詢價（5/hour）變成全網每小時只能 5 筆。
+修法：`app/rate_limit.py` 的 `client_ip()`，`TRUST_CF_CONNECTING_IP=true` 時改用 Cloudflare 的
+`CF-Connecting-IP`。**預設 false**——後端能被直接連到時，這個標頭可以偽造來繞過限流；
+只有不開 port 的正式版 compose 才設 true。
+
+#### 4. 正式環境 compose 與部署腳本
+
+- 新增 `docker-compose.prod.yml`（獨立檔案；Compose 的 override 無法可靠移除 ports）：
+  **不開任何 port**（Docker 的 port 會繞過 ufw）、backend／celery 不掛原始碼也不用 `--reload`、
+  `ENVIRONMENT=production`、加 `cloudflared`（固定 `2026.10.0`）、所有服務 `restart: unless-stopped`。
+  `DB_PASSWORD` 沿用開發版預設值寫法——正式站資料庫密碼在初始化時就固定了，改必填會連不上。
+- 新增 `infra/deploy_prod.sh`（取代未版控、IP 寫死的舊 `deploy_prod.sh`）：備份 DB → 請使用者在主機上貼 token
+  （輸入不顯示）→ `.env` 寫入 `COMPOSE_FILE=docker-compose.prod.yml`（之後主機上所有 `docker compose`
+  指令自動用正式版）→ 重建 → migration → 驗證（容器內 401、`/docs` 已關、主機不監聽 3000／8000、公開網址 200）。
+- `NEXT_PUBLIC_SITE_URL` 以前**沒有**當建置參數傳進 Docker，正式站的 sitemap／robots 會寫成 `localhost`；
+  開發版與正式版都補上。
+- 官網伺服器端抓作品案例改走 `INTERNAL_API_URL=http://backend:8000`（Docker 內網），不繞外網。
+- HSTS 由「2 年＋includeSubDomains＋preload」降為 1 天：剛上線就鎖死 2 年，設定出錯無法回頭。
+- 操作步驟（買網域、Cloudflare、Tunnel 路由、部署、退回）寫在 `DEPLOYMENT.md`「Cloudflare Tunnel 上線」。
+
+#### 驗證
+
+- 限流：新測試 `tests/test_rate_limit_client_ip.py`（5 項）。**舊程式實測**：三個不同訪客經 Tunnel
+  各打一次 → `[200, 200, 429]`（第三個被前兩人連累）；修後 `[200, 200, 200]`，同一訪客第三次仍 429，
+  不信任模式下偽造標頭仍 429。5 項在舊程式上全部失敗。
+- compose 守門：`tests/test_compose_prod.py`（6 項）。把 port 與 `--reload` 暫時加回正式版 → 3 項失敗，還原後全過。
+  兩個 compose 檔在 repo 根目錄，backend 容器內只掛 `backend/` 時這 6 項會 skip，CI 會跑；`requirements-dev.txt` 加 `PyYAML`。
+- pytest **272 passed**（橋接 VM，Python 3.10，FastAPI 0.135.0；261 ＋ 11）。
+- 前端：eslint、`tsc --noEmit`、`npm run build` 通過，路由 **24**（多 `/icon.svg`）。
+  以 `NEXT_PUBLIC_SITE_URL=https://everevo.com.tw` 建置：`robots.txt` 的 Sitemap 為正式網址；
+  首頁、登入、ERP 側欄、手機寬度頁首、頁尾以 Playwright 截圖確認；產出頁面無「龜山」字樣。
+- 報價單 PDF：實際產生並轉圖確認抬頭（中文字型可顯示 陛、實）。
+- ⚠️ **未驗證**：真實 DB＋HTTP（等使用者本機 Docker）；`docker compose config` 解析兩個 compose 檔
+  （VM 沒有 docker，部署腳本會在主機上檢查）；Compose 從 `.env` 讀 `COMPOSE_FILE`（腳本在重建前檢查，沒讀到就中止）；
+  Cloudflare 路由的路徑正規式 `^/(api/|health$)`（部署腳本最後打公開網址 `/health` 驗證）；正式站實際上線。
+
+#### 發現但不在這版處理
+
+- 官網「材料規格」寫「標準板材 2000×1000 mm、一張板 22.2 才」，與本廠標準板 S 1915×1315（v2.3 起）不符。
+- SSH 仍是密碼登入、22 對全網開放（Should）。
 
 ### v2.3.4（2026-10-15）— 裁切刀序補上「修窄」刀；不可轉零件不再被轉 90°
 

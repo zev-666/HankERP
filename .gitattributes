@@ -1,0 +1,2 @@
+# Shell 腳本一律 LF：infra/deploy_prod.sh 會從 Windows 工作目錄 scp 到 Linux 主機執行，CRLF 會讓 bash 報錯
+*.sh text eol=lf

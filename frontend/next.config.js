@@ -15,9 +15,12 @@ const nextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          // HSTS（v2.3.5 調整）：瀏覽器收到後，在 max-age 期間內只肯用 HTTPS 連這個網域。
+          // 原本是 2 年＋includeSubDomains＋preload——剛上線就設這麼長，任何子網域或憑證設定出錯
+          // 都無法回頭。先用 1 天、不含子網域、不 preload；上線穩定一個月後再逐步拉長。
           {
             key: "Strict-Transport-Security",
-            value: "max-age=63072000; includeSubDomains; preload",
+            value: "max-age=86400",
           },
         ],
       },

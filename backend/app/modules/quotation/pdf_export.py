@@ -18,11 +18,19 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 # reportlab內建的CID字型，無需額外安裝字型檔即可顯示中文（Adobe標準字型，Big5/繁中相容）
 pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
 
+# 品牌（永陛 & 進化 合作品牌）與「開立報價的法定公司」分開：
+# 品牌可以是兩家合用，但報價單上的公司名稱與統編只能是實際開立發票的那一家。
+# 使用者 2026-10-15 確認：開立公司為永陛實業有限公司（以下資料取自經濟部商工登記，使用者提供）。
+# 若日後進化壓克力也要開報價，需在報價單加「開立公司」欄位（資料表＋migration），不要只改這裡。
+BRAND_NAME = "永陛 &amp; 進化 EVEREVO"  # reportlab Paragraph 會解析標記，& 必須寫成 &amp;
+
 COMPANY_INFO = {
-    "name": "龜山壓克力製造有限公司",
-    "address": "桃園市龜山區（請於正式環境填入完整地址）",
-    "phone": "(03) 000-0000",
-    "tax_id": "00000000",
+    "name": "永陛實業有限公司",
+    "name_en": "YONG BE INDUSTRIAL CO., LTD.",
+    "address": "新北市樹林區三俊街65巷13號",
+    "phone": "(02) 2297-3956",
+    "fax": "(02) 2297-2798",
+    "tax_id": "12659649",
 }
 
 
@@ -49,10 +57,16 @@ def generate_quotation_pdf(quotation: dict, customer: dict, items: list[dict]) -
     elements = []
 
     # ── 標題
+    cn_brand = ParagraphStyle("CnBrand", fontName="STSong-Light", fontSize=10, leading=14,
+                              alignment=1, textColor=colors.HexColor("#1F8A7C"))
+    elements.append(Paragraph(BRAND_NAME, cn_brand))
     elements.append(Paragraph(COMPANY_INFO["name"], cn_title))
+    elements.append(Paragraph(COMPANY_INFO["name_en"], ParagraphStyle(
+        "CnEn", parent=cn_sub, alignment=1)))
     elements.append(Paragraph(
-        f"{COMPANY_INFO['address']} ｜ 電話：{COMPANY_INFO['phone']} ｜ 統編：{COMPANY_INFO['tax_id']}",
-        cn_sub
+        f"{COMPANY_INFO['address']} ｜ 電話：{COMPANY_INFO['phone']} ｜ 傳真：{COMPANY_INFO['fax']}"
+        f" ｜ 統編：{COMPANY_INFO['tax_id']}",
+        ParagraphStyle("CnSubC", parent=cn_sub, alignment=1)
     ))
     elements.append(Spacer(1, 10 * mm))
     elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1")))

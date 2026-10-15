@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # 資安相關：環境識別與CORS白名單
     ENVIRONMENT: str = "development"  # development | production
     CORS_ORIGINS: str = "http://localhost:3000"  # 逗號分隔多個網域
+    # 限流是否信任 Cloudflare 的 CF-Connecting-IP 標頭（v2.3.5）。只有「後端不對外開 port、
+    # 流量必經 Cloudflare Tunnel」時才可設 true，否則標頭可被偽造來繞過限流。見 app/rate_limit.py
+    TRUST_CF_CONNECTING_IP: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

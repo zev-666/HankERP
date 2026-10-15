@@ -1,0 +1,126 @@
+# ═══════════════════════════════════════════════════════════════════
+# 正式環境（v2.3.5）：永陛 & 進化 EVEREVO — https://everevo.com.tw
+#
+# 用法（主機上，repo 根目錄）：
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# 與 docker-compose.yml（本機開發用）的差別，每一條都是刻意的：
+#   1. 任何服務都「不」對外開 port。外部流量只走 Cloudflare Tunnel：
+#      主機上的 cloudflared 主動往外連到 Cloudflare，主機防火牆不必開 80/443/3000/8000。
+#      ⚠️ Docker 開出去的 port 會繞過 ufw，所以「不開」比「開了再擋」可靠。
+#   2. backend／celery 不掛載原始碼、不用 --reload：跑的是 image 裡建好的程式。
+#      改程式後要 `up -d --build` 才會生效。
+#   3. 限流信任 CF-Connecting-IP（TRUST_CF_CONNECTING_IP=true）——只因為第 1 點成立才安全。
+#   4. 官網伺服器端抓資料走 Docker 內網（INTERNAL_API_URL），不繞外網回到自己。
+#   5. 每個服務都 restart: unless-stopped，主機重開機後自動恢復。
+#   DB_PASSWORD 沿用開發版的預設值寫法：正式站資料庫的密碼在第一次初始化時就固定了，
+#   這裡改成必填或換新值都會讓 backend 連不上。要換資料庫密碼是另一件事（需先 ALTER USER）。
+#
+# 這是獨立檔案（不是 override），因為 Compose 的 override 無法可靠地「移除」ports。
+# 改 docker-compose.yml 的服務設定時，這裡要同步；backend/tests/test_compose_prod.py 會檢查。
+# 專案名稱沿用目錄名，所以資料庫 volume 與開發版相同，切換不會遺失資料。
+# ═══════════════════════════════════════════════════════════════════
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: acrylic_erp
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-erp_pass_2025}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_user -d acrylic_erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  db-backup:
+    image: postgres:15-alpine
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: erp_user
+      PGPASSWORD: ${DB_PASSWORD:-erp_pass_2025}
+      PGDATABASE: acrylic_erp
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./infra/backup:/scripts:ro
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "/scripts/backup.sh"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://erp_user:${DB_PASSWORD:-erp_pass_2025}@db:5432/acrylic_erp
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: "${SECRET_KEY:?請在根目錄.env設定SECRET_KEY（見.env.example說明）}"
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?請在根目錄.env設定SEED_ADMIN_PASSWORD（見.env.example說明）}"
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      TENANT_ID: default
+      ENVIRONMENT: production
+      CORS_ORIGINS: ${CORS_ORIGINS:?請在根目錄.env設定CORS_ORIGINS，例如 https://everevo.com.tw}
+      TRUST_CF_CONNECTING_IP: "true"
+    volumes:
+      - media_files:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+    # 不加 --reload；指令與 backend/Dockerfile 的 CMD 相同，寫出來是為了一眼看得到
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+
+  celery:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://erp_user:${DB_PASSWORD:-erp_pass_2025}@db:5432/acrylic_erp
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: "${SECRET_KEY:?請在根目錄.env設定SECRET_KEY}"
+    depends_on:
+      - redis
+      - db
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # 建置期寫死進 JS：瀏覽器打 API 的網址（同網域，由 Tunnel 依路徑 /api 分流到 backend）
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?請在根目錄.env設定NEXT_PUBLIC_API_URL，例如 https://everevo.com.tw}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?請在根目錄.env設定NEXT_PUBLIC_SITE_URL，例如 https://everevo.com.tw}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+      INTERNAL_API_URL: http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Cloudflare Tunnel 連接器：用 Zero Trust 後台產生的 token 連線。
+  # 路由（哪個網址、哪個路徑送到哪個服務）設定在 Cloudflare 後台，見 DEPLOYMENT.md「Cloudflare Tunnel」。
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.0
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?請在根目錄.env設定TUNNEL_TOKEN（Cloudflare Zero Trust → Networks → Tunnels）}
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  media_files:

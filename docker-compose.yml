@@ -1,3 +1,4 @@
+# 本機開發用。正式站（https://everevo.com.tw）用 docker-compose.prod.yml：不開 port、走 Cloudflare Tunnel。
 services:
   db:
     image: postgres:15-alpine
@@ -90,10 +91,13 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        # sitemap.xml／robots.txt 裡的網站網址，也是建置期寫死（v2.3.5 前漏傳，正式站會寫成 localhost）
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
     ports:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
 
 volumes:
   postgres_data:

@@ -5,8 +5,8 @@ import { TypeDrawing, kindFromText } from "@/components/site/TypeDrawing";
 import { listPublicCases } from "@/lib/publicApi";
 
 export const metadata: Metadata = {
-  title: "作品案例 | 龜山壓克力製造",
-  description: "彩妝架、酒類展示櫃、家電展示架、尿布架 — 桃園龜山複合式壓克力展示架製造實績。",
+  title: "作品案例 | 永陛 & 進化 EVEREVO",
+  description: "彩妝架、酒類展示櫃、家電展示架、尿布架 — 永陛 & 進化 EVEREVO 複合式壓克力展示架製造實績。",
 };
 
 export const revalidate = 60;
