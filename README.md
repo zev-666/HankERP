@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| **目前版本** | v2.3.5（2026-10-15，品牌改為永陛 & 進化 EVEREVO；Cloudflare Tunnel 上線設定） |
+| **目前版本** | v2.3.6（2026-10-15，修正 AI 快速估價：少算材料費、數字空白） |
 | **後端** | FastAPI 0.135 + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL 15/16 + Celery + Redis |
 | **前端** | Next.js 16.3.5 + Tailwind CSS + TanStack Query + Zustand + Recharts |
 | **實測規模** | 13 個業務模組 · 68 個業務 API 端點（＋`/health` 共 69）· 30 張業務資料表 · 24 條前端路由（22 靜態 ＋ 2 動態，v2.3.5 多了分頁圖示 `/icon.svg`）|
@@ -195,6 +195,28 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > v1.0–v1.9 的交付物為 `acrylic-erp-verified.zip`；**v2.0 起改以 git 儲存庫
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
+
+### v2.3.6（2026-10-15）— AI 快速估價：材料費沒算、片數被忽略、結果數字空白
+
+使用者在正式站按「計算報價」回報「沒反應」。實際是 v2.0 起就存在的三個 bug：
+
+1. **前端讀錯欄位**：讀 `final_price`／`material_cost`／`unit_price`，後端實際回
+   `total_price_twd`、`unit_price_twd`、`breakdown.material_cost_twd`……→ 結果框出現但數字全空。
+2. **材料成本永遠 0**：`QuoteEngine.calc_acrylic_cost` 只計 `type="acrylic"` 的項目，
+   估價表單送的板材沒有 `type` → 全部跳過。
+3. **片數被忽略**：表單送 `qty`，引擎讀 `quantity`。
+
+**影響**：預設規格（透明 3mm 500×400 ×2 片、CNC 30 分、組裝 1 時）舊程式報 **NT$923**（只有加工費），
+正確為 **NT$2,286**——少報約六成。因為畫面上數字是空白，這個錯誤金額不會被看到（推論，未查使用紀錄）。
+「建立報價單」（`POST /quotations`）走另一條計算路徑，不受影響。
+
+**修正**：`/ai-estimate` 把板材清單轉成引擎格式（補 `type`、`qty`→`quantity`；引擎本身不動）；
+前端改讀正確欄位，多顯示管銷與毛利率，估價失敗時顯示錯誤訊息（以前失敗也是靜默）。
+
+**驗證**：新測試 `tests/test_ai_estimate.py`（4 項，以前端實際送出的格式呼叫端點函式）：
+在舊程式上 3 項失敗（材料成本 0、總價 923、前端讀錯欄位），修後全過；其中一項檢查前端讀的欄位後端真的有回
+（在 backend 容器內讀不到前端原始碼時 skip，CI 會跑）。pytest **276 passed**（橋接 VM）；eslint、tsc、build 通過。
+⚠️ 未驗證：瀏覽器上實際按「計算報價」的畫面（等使用者本機 Docker）。
 
 ### v2.3.5（2026-10-15）— 品牌改為「永陛 & 進化 EVEREVO」；Cloudflare Tunnel 上線設定
 

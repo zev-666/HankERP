@@ -993,6 +993,11 @@ class BFDNestingEngine:
 
 ## 七、AI報價引擎（Phase 1 規則版）
 
+> **v2.3.6**：`/ai-estimate` 的 `acrylic_items` 是板材清單（`{color, thickness_mm, length_mm, width_mm, qty}`），
+> 端點會補上 `type="acrylic"` 並把 `qty` 轉成 `quantity` 再交給引擎；回傳欄位為
+> `total_price_twd`、`unit_price_twd`、`margin_pct`、`breakdown.{material,processing,overhead}_cost_twd`。
+> 下方程式碼是 v1.0 的設計稿，實際實作以 `app/ai/quote_engine.py` 為準。
+
 ```python
 # app/ai/quote_engine.py
 from dataclasses import dataclass

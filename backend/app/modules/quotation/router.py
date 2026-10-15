@@ -32,7 +32,14 @@ async def ai_estimate(
     current_user: User = Depends(get_current_user),
 ):
     engine = QuoteEngine(target_margin=data.target_margin or 0.35)
-    result = engine.generate_quote(data.acrylic_items, data.operations, data.quantity)
+    # v2.3.6：acrylic_items 是「板材清單」，引擎的 calc_acrylic_cost 只計 type="acrylic"
+    # 且讀 quantity。前端（與 schema 說明）送的是沒有 type、片數叫 qty 的格式，
+    # 以前材料成本因此永遠是 0、片數被忽略。這裡統一轉成引擎的格式。
+    bom_items = [
+        {**item, "type": "acrylic", "quantity": item.get("quantity", item.get("qty", 1))}
+        for item in data.acrylic_items
+    ]
+    result = engine.generate_quote(bom_items, data.operations, data.quantity)
     return {"success": True, "estimate": result,
             "note": "此為AI估算值，正式報價請由業務確認後建立報價單"}
 

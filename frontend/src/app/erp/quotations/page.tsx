@@ -35,6 +35,7 @@ export default function QuotationsPage() {
       quantity: aiForm.quantity,
     }),
     onSuccess: (data) => setAiResult(data.estimate),
+    onError: () => setAiResult(null),
   });
 
   return (
@@ -149,14 +150,23 @@ export default function QuotationsPage() {
               </div>
             </div>
 
+            {estimateMut.isError && (
+              <div className="mt-4 bg-red-50 border border-red-200 text-red-600 rounded-lg p-3 text-sm">
+                估價失敗：{(estimateMut.error as Error)?.message || "請稍後再試"}
+              </div>
+            )}
+
+            {/* 欄位名稱對應後端 QuoteEngine.generate_quote 的回傳（v2.3.6 修正：以前讀錯欄位，數字全空）。
+                backend/tests/test_ai_estimate.py 會檢查這裡讀的欄位後端真的有回。 */}
             {aiResult && (
               <div className="mt-4 bg-purple-50 rounded-xl p-4 space-y-1.5 text-sm">
-                <div className="flex justify-between"><span className="text-slate-500">材料成本</span><span>NT$ {aiResult.material_cost?.toLocaleString()}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">加工成本</span><span>NT$ {aiResult.processing_cost?.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">材料成本</span><span>NT$ {aiResult.breakdown?.material_cost_twd?.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">加工成本</span><span>NT$ {aiResult.breakdown?.processing_cost_twd?.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">管銷（25%）</span><span>NT$ {aiResult.breakdown?.overhead_cost_twd?.toLocaleString()}</span></div>
                 <div className="flex justify-between font-semibold text-purple-700 border-t border-purple-200 pt-1.5 mt-1.5">
-                  <span>建議報價（總額）</span><span>NT$ {aiResult.final_price?.toLocaleString()}</span>
+                  <span>建議報價（總額，毛利 {aiResult.margin_pct}）</span><span>NT$ {aiResult.total_price_twd?.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-xs text-slate-400"><span>單價</span><span>NT$ {aiResult.unit_price?.toLocaleString()}</span></div>
+                <div className="flex justify-between text-xs text-slate-400"><span>單價（× {aiResult.quantity}）</span><span>NT$ {aiResult.unit_price_twd?.toLocaleString()}</span></div>
               </div>
             )}
 
