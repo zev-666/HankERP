@@ -6,7 +6,7 @@ import { BrandMark } from "@/components/brand/BrandMark";
 import {
   LayoutDashboard, Users, FileText, Package, ShoppingCart,
   ClipboardList, Scissors, BarChart3, Settings, LogOut, Wrench, Layers,
-  Inbox, Image as ImageIcon
+  Inbox, Image as ImageIcon, UserCog, KeyRound
 } from "lucide-react";
 
 const NAV = [
@@ -28,6 +28,13 @@ const NAV = [
   { label: "作品管理", href: "/erp/portfolio", icon: ImageIcon },
 ];
 
+// v2.3.8：只有系統管理員看得到「帳號管理」。這只是介面上的整理，
+// 真正的權限由後端 PERMISSION_MAP 把關（非管理員打 /auth/users 一律 403）。
+const ADMIN_NAV = [
+  { type: "section", label: "系統" },
+  { label: "帳號管理", href: "/erp/users", icon: UserCog },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
@@ -44,7 +51,7 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="flex-1 py-2 overflow-y-auto">
-        {NAV.map((item, i) => {
+        {[...NAV, ...(user?.role === "admin" ? ADMIN_NAV : [])].map((item, i) => {
           if ("type" in item && item.type === "section") {
             return (
               <div key={i} className="px-4 py-1.5 text-slate-500 text-[10px] uppercase tracking-wider mt-2">
@@ -70,6 +77,10 @@ export function Sidebar() {
       </nav>
       <div className="p-4 border-t border-slate-700">
         <div className="text-slate-400 text-xs mb-2">{user?.full_name}</div>
+        <Link href="/erp/account"
+          className={`flex items-center gap-2 text-xs mb-2 transition-colors ${pathname === "/erp/account" ? "text-white" : "text-slate-400 hover:text-white"}`}>
+          <KeyRound size={13} /> 變更密碼
+        </Link>
         <button
           onClick={logout}
           className="flex items-center gap-2 text-slate-400 hover:text-white text-xs transition-colors"

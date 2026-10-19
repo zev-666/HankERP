@@ -1,5 +1,6 @@
 ﻿import secrets
-from datetime import timedelta, datetime
+import uuid
+from datetime import timedelta, datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,7 @@ from app.database import get_db
 from app.models.user import User, Role
 from app.auth.security import verify_password, create_access_token, get_password_hash
 from app.auth.dependencies import get_current_user
+from app.auth import user_admin
 from app.config import settings
 from app.rate_limit import limiter
 
@@ -62,6 +64,30 @@ class ChangePasswordRequest(BaseModel):
     def _check_password(cls, v: str) -> str:
         return _validate_password_strength(v)
 
+class UpdateUserRequest(BaseModel):
+    """管理員修改帳號（v2.3.8）。沒有給的欄位不會變動。"""
+    full_name: Optional[str] = None
+    role_name: Optional[str] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("full_name")
+    @classmethod
+    def _check_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        if not v or len(v) > 100:
+            raise ValueError("姓名需為 1～100 個字")
+        return v
+
+class AdminResetPasswordRequest(BaseModel):
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _check_password(cls, v: str) -> str:
+        return _validate_password_strength(v)
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
@@ -81,6 +107,10 @@ async def login(request: Request, request_body: LoginRequest, db: AsyncSession =
     user = result.scalar_one_or_none()
     if not user or not verify_password(request_body.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="帳號或密碼錯誤")
+
+    # v2.3.8：記錄最後登入時間，帳號管理頁用來判斷誰很久沒用、可以停用
+    user.last_login = datetime.now(timezone.utc)
+    await db.flush()
 
     token = create_access_token(data={"sub": str(user.id)})
     role_name = user.role.name if user.role else None
@@ -183,6 +213,55 @@ async def reset_password(request: ResetPasswordRequest, db: AsyncSession = Depen
 
 
 # ⚠️ 資安修正：原本這裡有一個 POST /setup-admin 端點，完全沒有身份驗證保護，
-# 且用寫死的密碼「Admin@2025!」建立管理員帳號，任何人都能對外呼叫搶先建立管理員。
+# 且用寫死在程式碼裡的密碼建立管理員帳號，任何人都能對外呼叫搶先建立管理員。
 # 官方建立管理員的方式是 scripts/seed_data.py（透過伺服器執行權限執行，
 # 見 README.md「快速啟動」第4步），這裡不需要也不該有對外開放的重複機制，已移除。
+
+
+# ── 帳號管理（v2.3.8）────────────────────────────────────────────────
+# 權限：/me 只要登入；其餘需要 admin 資源（只有系統管理員角色有）。見 permissions.PERMISSION_MAP。
+
+@router.get("/me", summary="目前登入的帳號資料")
+async def me(current_user: User = Depends(get_current_user)):
+    return {"success": True, "data": user_admin.user_out(current_user)}
+
+
+@router.get("/roles", summary="角色清單（帳號管理下拉選單用）")
+async def list_roles(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    roles = await user_admin.list_roles(db, current_user.tenant_id)
+    return {"success": True, "data": [user_admin.role_out(r) for r in roles]}
+
+
+@router.get("/users", summary="帳號清單（僅限系統管理員）")
+async def list_users(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    users = await user_admin.list_users(db, current_user.tenant_id)
+    return {"success": True, "data": [user_admin.user_out(u) for u in users]}
+
+
+@router.patch("/users/{user_id}", summary="修改帳號：姓名、角色、啟用／停用（僅限系統管理員）")
+async def update_user(
+    user_id: uuid.UUID,
+    request_body: UpdateUserRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    target = await user_admin.get_user_in_tenant(db, current_user.tenant_id, user_id)
+    target = await user_admin.update_user(
+        db, current_user, target,
+        full_name=request_body.full_name,
+        role_name=request_body.role_name,
+        is_active=request_body.is_active,
+    )
+    return {"success": True, "data": user_admin.user_out(target), "message": "帳號已更新"}
+
+
+@router.post("/users/{user_id}/reset-password", summary="管理員重設員工密碼（僅限系統管理員）")
+async def admin_reset_password(
+    user_id: uuid.UUID,
+    request_body: AdminResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    target = await user_admin.get_user_in_tenant(db, current_user.tenant_id, user_id)
+    await user_admin.admin_reset_password(db, current_user, target, request_body.new_password)
+    return {"success": True, "message": "密碼已重設，請把新密碼親自告訴對方，並請對方登入後自行變更"}

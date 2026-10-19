@@ -1194,11 +1194,11 @@ class QuoteEngine:
 | 現場作業員 operator | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | 讀+報工 | ✗ | ✗ | ✗ | ✗ | ✗ |
 | 品管 qc | ✗ | ✗ | 讀 | ✗ | 讀 | 讀+品質回報 | ✗ | 讀 | ✗ | ✗ | ✗ | ✗ |
 
-實際可存取的受權限管控端點數（共 61 支，另有 7 支公開端點與 1 支僅需登入）：
+實際可存取的受權限管控端點數（共 65 支，另有 7 支公開端點與 2 支僅需登入；v2.3.8 帳號管理 +4 受管控、+1 僅需登入）：
 
 | 角色 | admin | owner | sales | engineer | planner | warehouse | purchaser | operator | qc |
 |---|---|---|---|---|---|---|---|---|---|
-| 端點數 | 61 | 31 | 30 | 21 | 21 | 18 | 11 | 5 | 12 |
+| 端點數 | 65 | 31 | 30 | 21 | 21 | 18 | 11 | 5 | 12 |
 
 ### v2.2 相對於舊矩陣的變更與理由
 
@@ -1243,6 +1243,27 @@ class QuoteEngine:
 - **每個 `APIRouter(...)` 都必須帶 `route_class=CommitBeforeResponseRoute`**。`include_router`
   保留來源 router 的 route class，只設 `app.router` 無效。
   `tests/test_commit_before_response.py` 會檢查每一支 `/api/` 路由，漏加會在 CI 失敗。
+
+### 帳號管理（v2.3.8）
+
+| 端點 | 權限 | 用途 |
+|---|---|---|
+| `GET /api/v1/auth/me` | 僅需登入 | 自己的帳號資料 |
+| `POST /api/v1/auth/change-password` | 僅需登入 | 自己改密碼（需目前密碼） |
+| `GET /api/v1/auth/roles` | `admin:read` | 角色下拉選單 |
+| `GET /api/v1/auth/users` | `admin:read` | 同租戶帳號清單 |
+| `POST /api/v1/auth/register` | `admin:write` | 建立帳號（v2.2 起） |
+| `PATCH /api/v1/auth/users/{user_id}` | `admin:write` | 改姓名、角色、啟用／停用 |
+| `POST /api/v1/auth/users/{user_id}/reset-password` | `admin:write` | 幫別人重設密碼 |
+
+- 離職用**停用**，不提供刪除：帳號與歷史單據的關聯保留。停用後登入與既有登入憑證立刻失效
+  （每個請求都檢查 `is_active`）。
+- 管理員**不能停用自己、不能改自己的角色、不能用重設改自己的密碼**（要走需要舊密碼的變更密碼）。
+  因操作者本身一定是啟用中的管理員，這也保證系統至少留一位管理員。
+- 只能看到、改到同租戶的帳號，其他租戶一律 404。回應逐欄輸出（`user_admin.user_out`），不含密碼雜湊。
+- 登入成功會更新 `users.last_login`（欄位既有，不需 migration）。
+- 已知限制：重設密碼不會讓對方已登入的畫面立刻失效（JWT 有效 60 分鐘）；要立刻踢掉請停用。
+- 前端：`/erp/users`（側欄「系統 → 帳號管理」，只對 admin 顯示）、`/erp/account`（側欄底部「變更密碼」，每個人都有）。
 
 ### 品牌與正式環境（v2.3.5）
 

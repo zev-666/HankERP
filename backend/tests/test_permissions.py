@@ -75,9 +75,10 @@ def test_端點分類數量符合預期():
     # 7 支公開：/health、login、forgot-password、reset-password、
     # 官網詢價送出、官網作品列表、官網作品詳情
     assert len(public) == 7, sorted(public)
-    # 1 支僅需登入不看角色：變更自己的密碼
-    assert len(auth_only) == 1, sorted(auth_only)
-    assert len(PROTECTED) == 61
+    # 2 支僅需登入不看角色：變更自己的密碼、看自己的帳號資料（v2.3.8）
+    assert len(auth_only) == 2, sorted(auth_only)
+    # v2.3.8 帳號管理 +4：角色清單、帳號清單、修改帳號、重設別人密碼
+    assert len(PROTECTED) == 65
 
 
 # ── 2. 權限判斷函式本身 ────────────────────────────────────────────────
@@ -101,7 +102,7 @@ def test_沒有權限就一支都不能碰(perms):
 # 數字本身不是重點，重點是它被釘住了：日後任何人改動 ROLES 或
 # PERMISSION_MAP，只要影響到權限範圍就會在這裡亮紅燈，必須有意識地更新。
 EXPECTED_ACCESSIBLE = {
-    "admin": 61,
+    "admin": 65,
     "owner": 31,
     "sales": 30,
     "engineer": 21,
@@ -136,6 +137,15 @@ def test_管理員可存取全部受管控端點():
 BOUNDARY_CASES = [
     # 只有 admin 能開帳號——這支先前是公開端點且接受前端指定 role_name
     ("admin", "POST", "/api/v1/auth/register", True),
+    # v2.3.8 帳號管理只有系統管理員能碰；廠長也不行（廠長能簽核，但不管帳號）
+    ("admin", "GET", "/api/v1/auth/users", True),
+    ("admin", "PATCH", "/api/v1/auth/users/{user_id}", True),
+    ("admin", "POST", "/api/v1/auth/users/{user_id}/reset-password", True),
+    ("owner", "GET", "/api/v1/auth/users", False),
+    ("owner", "PATCH", "/api/v1/auth/users/{user_id}", False),
+    ("owner", "POST", "/api/v1/auth/users/{user_id}/reset-password", False),
+    ("sales", "GET", "/api/v1/auth/roles", False),
+    ("operator", "PATCH", "/api/v1/auth/users/{user_id}", False),
     ("owner", "POST", "/api/v1/auth/register", False),
     ("sales", "POST", "/api/v1/auth/register", False),
 

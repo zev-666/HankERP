@@ -106,6 +106,12 @@ jobs:
       - name: RBAC 權限邊界驗證（9 種角色真實 HTTP）
         run: API_BASE=http://127.0.0.1:8000 python scripts/verify_rbac.py
 
+      # v2.3.8：帳號管理。建帳號 → 改角色 → 管理員重設密碼 → 員工自己改密碼 → 停用後立刻失效；
+      # 並確認非管理員碰不到、管理員不能把自己鎖在外面、回應不帶密碼雜湊。
+      # 這支在 v2.3.7 以前的程式碼上必定失敗（當時沒有這些端點）。
+      - name: 帳號管理驗證（真實 HTTP）
+        run: API_BASE=http://127.0.0.1:8000 python scripts/verify_users.py
+
       - name: 記錄實際端點數（避免文件數字再次過期）
         run: |
           python - <<'PY'

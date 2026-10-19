@@ -85,6 +85,12 @@ PERMISSION_MAP: dict[tuple[str, str], object] = {
     # v2.2：自助註冊關閉。原本這支是公開端點且接受前端指定 role_name，
     # 任何人都能自己註冊成 admin，RBAC 做得再好也會被這支繞過。
     ("POST", "/api/v1/auth/register"): Need("admin", "write"),
+    # v2.3.8 帳號管理：看自己的資料只要登入；看清單、改帳號、重設別人密碼只有管理員
+    ("GET", "/api/v1/auth/me"): AUTHENTICATED,
+    ("GET", "/api/v1/auth/roles"): Need("admin", "read"),
+    ("GET", "/api/v1/auth/users"): Need("admin", "read"),
+    ("PATCH", "/api/v1/auth/users/{user_id}"): Need("admin", "write"),
+    ("POST", "/api/v1/auth/users/{user_id}/reset-password"): Need("admin", "write"),
 
     # ── 客戶 CRM ──
     ("GET", "/api/v1/customers"): Need("customers", "read"),

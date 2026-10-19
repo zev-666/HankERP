@@ -55,6 +55,22 @@ class ApiClient {
   login(email: string, password: string) {
     return this.post<{ access_token: string; token_type: string; user_id: string; user_name: string; role: string | null }>("/api/v1/auth/login", { email, password });
   }
+  // 帳號管理（v2.3.8）
+  getMe() { return this.get<{ data: AccountUser }>("/api/v1/auth/me"); }
+  changePassword(old_password: string, new_password: string) {
+    return this.post<{ message: string }>("/api/v1/auth/change-password", { old_password, new_password });
+  }
+  getRoles() { return this.get<{ data: { name: string; display_name: string }[] }>("/api/v1/auth/roles"); }
+  getUsers() { return this.get<{ data: AccountUser[] }>("/api/v1/auth/users"); }
+  createUser(d: { email: string; password: string; full_name: string; role_name: string }) {
+    return this.post<{ message: string }>("/api/v1/auth/register", d);
+  }
+  updateUser(id: string, d: { full_name?: string; role_name?: string; is_active?: boolean }) {
+    return this.patch<{ data: AccountUser }>(`/api/v1/auth/users/${id}`, d);
+  }
+  resetUserPassword(id: string, new_password: string) {
+    return this.post<{ message: string }>(`/api/v1/auth/users/${id}/reset-password`, { new_password });
+  }
   // Dashboard
   getDashboard() { return this.get<any>("/api/v1/analytics/dashboard"); }
   getMaterialUtilization(months = 6) { return this.get<any>(`/api/v1/analytics/material-utilization?months=${months}`); }
@@ -140,6 +156,32 @@ class ApiClient {
     const token = this.getToken();
     return `${BASE_URL}/api/v1/quotations/${quoteId}/pdf`;
   }
+}
+
+export type AccountUser = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role_name: string | null;
+  role_display_name: string | null;
+  is_active: boolean;
+  created_at: string | null;
+  last_login: string | null;
+};
+
+/**
+ * 把 API 錯誤轉成給人看的一句話。
+ * 欄位驗證失敗（422）時後端回的是陣列，例如 [{"msg":"Value error, 密碼至少需要8個字元"}]。
+ */
+export function errorText(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((d: any) => String(d?.msg ?? d).replace(/^Value error, /, "")).join("；");
+    }
+  } catch { /* 不是 JSON，就是一般文字訊息 */ }
+  return raw;
 }
 
 export const api = new ApiClient();
