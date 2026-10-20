@@ -67,10 +67,12 @@ grep -q '^SEED_ADMIN_PASSWORD=.\+' .env || die ".env 沒有 SEED_ADMIN_PASSWORD"
 ok "SEED_ADMIN_PASSWORD 存在（不顯示）"
 grep -q '^DB_PASSWORD=.\+' .env && ok "DB_PASSWORD 有設定（不顯示，不會變動）" \
   || ok "DB_PASSWORD 沒設定，沿用 compose 預設值（不會變動；改了會連不上既有資料庫）"
-if grep -q '^TUNNEL_TOKEN=.\+' .env; then ok "TUNNEL_TOKEN 存在（不顯示）"; NEED_TOKEN=0
+# PENDING 是 infra/setup_new_host.sh 寫入的佔位值（新主機裝好、Tunnel 還沒建）
+if grep -q '^TUNNEL_TOKEN=.\+' .env && [ "$(getkv TUNNEL_TOKEN)" != "PENDING" ]; then ok "TUNNEL_TOKEN 存在（不顯示）"; NEED_TOKEN=0
 else warn "TUNNEL_TOKEN 還沒設定，等一下會請你貼上"; NEED_TOKEN=1; fi
 
-if [ "$BEHIND" = "0" ] && [ "$(getkv COMPOSE_FILE)" = "$PROD_FILE" ]; then
+CF_UP=$($DC ps --status running --services 2>/dev/null | grep -cx cloudflared || true)
+if [ "$BEHIND" = "0" ] && [ "$(getkv COMPOSE_FILE)" = "$PROD_FILE" ] && [ "$NEED_TOKEN" = "0" ] && [ "$CF_UP" = "1" ]; then
   echo; ok "已是最新版且已是 Tunnel 模式，不需要部署。"; exit 0
 fi
 
@@ -128,7 +130,7 @@ in_backend() { $DC exec -T backend python -c "import sys,urllib.request as u
 try: r=u.urlopen('http://localhost:8000'+sys.argv[1],timeout=3); print(r.status)
 except Exception as e: print(getattr(e,'code','ERR'))" "$1" 2>/dev/null; }
 echo -n "  等待 backend 就緒"
-for i in $(seq 1 60); do [ "$(in_backend /health)" = "200" ] && break; echo -n "."; sleep 3; done; echo
+for _ in $(seq 1 60); do [ "$(in_backend /health)" = "200" ] && break; echo -n "."; sleep 3; done; echo
 [ "$(in_backend /health)" = "200" ] || die "backend 3 分鐘內沒有就緒，請看：$DC logs backend --tail 50"
 ok "backend 就緒"
 

@@ -9,13 +9,55 @@
 |---|---|
 | 主機 | Zeabur × Tencent Cloud Singapore，Ubuntu 24.04 LTS |
 | 規格 | 2 vCPU / 1.9 GB RAM / 40 GB SSD |
-| 對外位址 | **v2.3.5 起：`https://everevo.com.tw`**（Cloudflare Tunnel，主機不開任何 port）；之前是 `http://43.156.110.76:3000`／`:8000` |
+| 對外位址 | 目前 `http://43.156.110.76:3000`（Zeabur，11/14 到期）；搬家後 `https://everevo.com.tw`（AWS Lightsail＋Cloudflare Tunnel，主機不開任何 port） |
 | SSH | `ubuntu@43.156.110.76`（仍用 IP） |
 | 專案路徑 | `/home/ubuntu/HankERP` |
 | 容器 | v2.3.5 起用 `docker-compose.prod.yml`：frontend / backend / celery / db / redis / db-backup / cloudflared，共 7 個 |
 | 部署 | `infra/deploy_prod.sh`（見下一節） |
 
 ---
+
+## 搬到新主機（v2.3.9）
+
+**為什麼**：Zeabur 2026-10-17 公告停止營運，12/1 停止續約、12/31 前所有專用主機到期關機。
+原正式站（Zeabur 代管的騰訊雲新加坡 2C2G，`43.156.110.76`）11/14 到期。新主機選 **AWS Lightsail 4GB（香港或東京）**。
+
+**資料**：系統沒有檔案上傳功能，**資料庫匯出檔就是全部資料**。舊主機匯出方式：
+
+```bash
+cd ~/HankERP && docker compose up -d db && sleep 15
+docker compose exec -T db pg_dump -U erp_user -d acrylic_erp -Fc > ~/hankerp-final.dump
+```
+
+**新主機一鍵安裝**：`infra/setup_new_host.sh`（全新 Ubuntu 24.04，用 ubuntu 帳號執行）
+
+```powershell
+# 你的電腦：把資料庫檔傳上新主機（金鑰檔與 IP 換成自己的）
+scp -i $HOME\.ssh\<Lightsail 金鑰>.pem .claude-tmp\hankerp-final.dump ubuntu@<新主機 IP>:
+ssh -i $HOME\.ssh\<Lightsail 金鑰>.pem ubuntu@<新主機 IP>
+```
+
+```bash
+# 新主機上
+curl -fsSL https://raw.githubusercontent.com/zev-666/HankERP/main/infra/setup_new_host.sh -o setup_new_host.sh
+bash setup_new_host.sh ~/hankerp-final.dump
+```
+
+腳本會：建 2GB swap → 依 Docker 官方文件安裝 Docker → clone 程式 → 產生 `.env`（SECRET_KEY、DB_PASSWORD 等隨機產生、不顯示；
+`COMPOSE_FILE=docker-compose.prod.yml`；網址設為 `https://everevo.com.tw`、API `https://api.everevo.com.tw`；`TUNNEL_TOKEN=PENDING`）→
+建置並啟動資料庫 → **只在資料庫是空的時候**還原匯出檔 → 啟動網站（cloudflared 先不啟動）→ migration＋同步角色 → 驗證。
+每步失敗就停，可整支重跑（`.env` 已存在就沿用、資料庫已有資料就不還原）。
+
+裝完後網站在主機裡運作、外面連不到（刻意不開 port）。Cloudflare Tunnel 建好後執行 `bash ~/HankERP/infra/deploy_prod.sh`，
+腳本看到 `TUNNEL_TOKEN=PENDING` 會請你貼 token，啟動 cloudflared，`https://everevo.com.tw` 上線。
+
+**Lightsail 主機設定**：Ubuntu 24.04 LTS、4GB 方案、開啟每日自動快照、綁定免費的固定 IP；
+Networking 防火牆**只留 SSH（22）**，刪掉預設的 HTTP（80）規則（流量走 Tunnel，不需要）。
+SSH 用 Lightsail 下載的金鑰（`.pem`）登入，不用密碼。
+
+**已驗證（v2.3.9，雲端沙盒）**：`docker compose config` 實測 `.env` 的 `COMPOSE_FILE` 會生效（7 個服務、無對外 port、
+前端建置參數為正式網址；拿掉這行時腳本的檢查會擋下）；匯出檔以 `pg_restore --exit-on-error` 還原到 PostgreSQL 成功（31 張表、版本 head）；
+`bash -n`、shellcheck 無警告。**未驗證**：在真的 Lightsail 主機上整支執行（沙盒連不到 Docker Hub）。
 
 ## Cloudflare Tunnel 上線（v2.3.5）
 

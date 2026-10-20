@@ -48,6 +48,8 @@
 > **v2.3.6**（2026-10-15）：AI 快速估價修正——前端讀錯欄位（數字空白）、材料成本永遠 0、片數被忽略。
 > 舊程式預設規格報 NT$923、正確為 NT$2,286。pytest **276 passed**（新增 4 項，3 項在舊程式上失敗）。
 >
+> **v2.3.9**（2026-10-20）：Zeabur 停止營運，新增 `infra/setup_new_host.sh` 新主機一鍵安裝（目標 AWS Lightsail）。程式邏輯未改，清單項目數不變。
+>
 > **v2.3.8**（2026-10-19）：新增帳號管理頁與變更密碼頁；新增 5 支端點（業務端點 68 → **73**，
 > 含 `/health` 共 74，`/openapi.json` 實測）；前端路由 24 → **26**。pytest **290 passed**（雲端沙盒，
 > 含 compose 與前端欄位檢查）；`verify_users.py` 36 項、`verify_rbac.py`、`verify_e2e.py` 皆以真實 PostgreSQL 16＋HTTP 通過。

@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| **目前版本** | v2.3.8（2026-10-19，帳號管理頁：建帳號、改角色、重設密碼、停用、自己改密碼） |
+| **目前版本** | v2.3.9（2026-10-20，搬家工具：新主機一鍵安裝腳本；Zeabur 停止營運） |
 | **後端** | FastAPI 0.135 + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL 15/16 + Celery + Redis |
 | **前端** | Next.js 16.3.5 + Tailwind CSS + TanStack Query + Zustand + Recharts |
 | **實測規模** | 13 個業務模組 · 73 個業務 API 端點（＋`/health` 共 74）· 30 張業務資料表 · 26 條前端路由（24 靜態 ＋ 2 動態）|
@@ -195,6 +195,22 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > v1.0–v1.9 的交付物為 `acrylic-erp-verified.zip`；**v2.0 起改以 git 儲存庫
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
+
+### v2.3.9（2026-10-20）— 搬家工具：新主機一鍵安裝
+
+**為什麼**：Zeabur 10/17 公告停止營運（12/1 停止續約、12/31 前專用主機全部關機），正式站 11/14 到期，要搬到 AWS Lightsail。
+
+- 新增 `infra/setup_new_host.sh`：全新 Ubuntu 24.04 一支腳本裝好整套系統並還原資料庫，直接用正式版設定（不開 port、重開機自動啟動）。
+  說明見 `DEPLOYMENT.md`「搬到新主機」。
+- `infra/deploy_prod.sh`：把 `TUNNEL_TOKEN=PENDING`（新主機安裝時的佔位值）視為尚未設定，會詢問 token；
+  「已是最新版、不需要部署」的提早結束，改為還要求 token 已設定且 cloudflared 正在跑——否則新主機第一次接 Tunnel 時會直接結束。
+- 程式邏輯未改，不需要部署到舊主機。
+
+**驗證**：`docker compose config` 實測 `.env` 的 `COMPOSE_FILE` 會讓 Compose 改用正式版（7 個服務含 cloudflared、無對外 port、
+前端建置參數為 `https://api.everevo.com.tw`／`https://everevo.com.tw`、後端 `ENVIRONMENT=production`、`TRUST_CF_CONNECTING_IP=true`）；
+拿掉這行時 cloudflared 不在服務清單，腳本會擋下。舊主機 10/20 匯出檔（79,198 bytes）以 `pg_restore --exit-on-error` 還原成功：31 張表、
+版本 `c3e8f1a2b4d5`、1 個帳號。兩支腳本 `bash -n`、shellcheck（warning 以上）皆無問題。
+⚠️ 未驗證：在真的 Lightsail 主機上整支執行（雲端沙盒連不到 Docker Hub，無法拉映像檔）。
 
 ### v2.3.8（2026-10-19）— 帳號管理頁
 
