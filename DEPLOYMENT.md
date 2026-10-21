@@ -29,7 +29,7 @@ cd ~/HankERP && docker compose up -d db && sleep 15
 docker compose exec -T db pg_dump -U erp_user -d acrylic_erp -Fc > ~/hankerp-final.dump
 ```
 
-**新主機一鍵安裝**：`infra/setup_new_host.sh`（全新 Ubuntu 24.04，用 ubuntu 帳號執行）
+**新主機一鍵安裝**：`infra/setup_new_host.sh`（全新 Ubuntu 24.04；一般帳號或 root 皆可，v2.3.10）
 
 ```powershell
 # 你的電腦：把資料庫檔傳上新主機（金鑰檔與 IP 換成自己的）
@@ -58,6 +58,28 @@ SSH 用 Lightsail 下載的金鑰（`.pem`）登入，不用密碼。
 **已驗證（v2.3.9，雲端沙盒）**：`docker compose config` 實測 `.env` 的 `COMPOSE_FILE` 會生效（7 個服務、無對外 port、
 前端建置參數為正式網址；拿掉這行時腳本的檢查會擋下）；匯出檔以 `pg_restore --exit-on-error` 還原到 PostgreSQL 成功（31 張表、版本 head）；
 `bash -n`、shellcheck 無警告。**未驗證**：在真的 Lightsail 主機上整支執行（沙盒連不到 Docker Hub）。
+
+### 各家主機的建立重點（v2.3.10）
+
+安裝腳本只需要：**Ubuntu 24.04 LTS、記憶體 4GB、硬碟 25GB 以上、能連外網**。一般帳號（有 sudo）或 root 都可以執行。
+
+| 廠商 | 規格 | 注意 |
+|---|---|---|
+| AWS Lightsail（東京） | 4GB／US$24 | 新帳號可能被限制方案大小（2026-10 實測），要開客服單放寬；登入帳號 `ubuntu`、用 `.pem` 金鑰 |
+| Google Cloud（台灣 asia-east1） | e2-medium（2 vCPU／4GB） | **開機磁碟預設 10GB，要改成 30GB**；防火牆不要勾「允許 HTTP/HTTPS」；可用主控台的「SSH」按鈕登入並「上傳檔案」傳匯出檔 |
+| Akamai Linode（東京） | Shared 4GB／US$24 | 預設 root＋密碼登入，建立時改用 SSH 金鑰；Cloud Firewall 只放行 SSH |
+
+所有廠商都一樣：防火牆**只開 SSH（22）**，網站流量走 Cloudflare Tunnel；開啟廠商提供的每日備份／快照。
+
+### 搬家當天的順序
+
+1. 新主機建好、能 SSH 登入。
+2. **舊主機重新匯出一次資料庫**（上面的 `pg_dump` 指令）並 scp 回自己電腦——10/20 的匯出檔之後若有人在正式站新增資料，要用新的。
+3. 把匯出檔傳上新主機 → 執行 `setup_new_host.sh`（約 10～15 分鐘）。
+4. Cloudflare 建 Tunnel（3 條路由）→ 新主機執行 `deploy_prod.sh` 貼 token → `https://everevo.com.tw` 上線、實測。
+5. 新站確認沒問題幾天後，才關掉舊主機。
+
+網域（HiNet 購買 → 交給 Cloudflare 管理 DNS）與主機互不相依，可以先做；Tunnel 需要網域已在 Cloudflare 顯示 Active。
 
 ## Cloudflare Tunnel 上線（v2.3.5）
 

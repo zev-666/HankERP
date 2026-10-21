@@ -1272,7 +1272,7 @@ class QuoteEngine:
 - `HankERP`、租戶 slug `guishan-acrylic`、資料庫名 `acrylic_erp` 是內部識別碼，不隨品牌改名。
 - 正式站 `https://everevo.com.tw`（前台）＋ `https://api.everevo.com.tw`（API）：Cloudflare Tunnel 一個網址對一個服務（v2.3.7；原設計同網域依路徑分流，因後台表單不保證有路徑欄位而改）。
   正式版 compose（`docker-compose.prod.yml`）**不對外開任何 port**。
-- 正式主機（v2.3.9）：原 Zeabur 代管主機因 Zeabur 停止營運（12/31 前關機）改搬 **AWS Lightsail 4GB**（香港或東京）；
+- 正式主機（v2.3.9）：原 Zeabur 代管主機因 Zeabur 停止營運（12/31 前關機）改搬新主機（首選 AWS Lightsail 4GB 東京；v2.3.10 起安裝腳本不綁定廠商，Google Cloud 台灣、Linode 等 Ubuntu 24.04＋4GB 皆可）；
   新主機以 `infra/setup_new_host.sh` 安裝並還原資料庫，之後所有部署用 `infra/deploy_prod.sh`。
 - 限流以 `app/rate_limit.py` 的 `client_ip()` 計數：`TRUST_CF_CONNECTING_IP=true` 時用 `CF-Connecting-IP`，
   否則用連線來源位址。**只有後端不對外開 port 時才可設 true**（標頭可偽造）；預設 false。

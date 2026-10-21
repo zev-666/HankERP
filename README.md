@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| **目前版本** | v2.3.9（2026-10-20，搬家工具：新主機一鍵安裝腳本；Zeabur 停止營運） |
+| **目前版本** | v2.3.10（2026-10-21，新主機安裝腳本支援各家雲端與 root 帳號） |
 | **後端** | FastAPI 0.135 + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL 15/16 + Celery + Redis |
 | **前端** | Next.js 16.3.5 + Tailwind CSS + TanStack Query + Zustand + Recharts |
 | **實測規模** | 13 個業務模組 · 73 個業務 API 端點（＋`/health` 共 74）· 30 張業務資料表 · 26 條前端路由（24 靜態 ＋ 2 動態）|
@@ -195,6 +195,18 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > v1.0–v1.9 的交付物為 `acrylic-erp-verified.zip`；**v2.0 起改以 git 儲存庫
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
+
+### v2.3.10（2026-10-21）— 安裝腳本不綁定 AWS
+
+**為什麼**：AWS Lightsail 新帳號被限制方案大小（4GB、2GB 都回 `CreateInstances 400`，已開客服單）；Google Cloud 新帳單帳戶建立即被關閉（已申訴）。
+主機可能改用別家（Google Cloud 台灣、Akamai Linode 等），而 Linode／Vultr 預設用 root 登入，舊腳本會直接拒絕 root。
+
+- `infra/setup_new_host.sh`：允許用 root 執行（缺 sudo 時自動安裝；程式放 `/root/HankERP`；不對 root 做 `usermod -aG docker`）；
+  訊息中的「ubuntu 帳號」改為實際執行帳號。其餘步驟不變。
+- `DEPLOYMENT.md`「搬到新主機」補上各家主機的建立重點（硬碟至少 25GB、防火牆只留 SSH、上傳匯出檔的方式）與搬家當天順序。
+
+**驗證**：shellcheck（warning 以上）無問題、`bash -n` 通過；在沙盒以 root 實跑第 1 步：有匯出檔 → 全部 ✓、繼續；沒給匯出檔 → 停下並說明。
+⚠️ 未驗證：在任何一家真的新主機上整支執行（沙盒連不到 Docker Hub）。
 
 ### v2.3.9（2026-10-20）— 搬家工具：新主機一鍵安裝
 

@@ -2,11 +2,12 @@
 # ═══════════════════════════════════════════════════════════════════
 # 永陛 & 進化 EVEREVO — 新主機一鍵安裝（v2.3.9）
 #
-# 在一台全新的 Ubuntu 24.04（例如 AWS Lightsail 4GB）上，從零裝好整套系統，
+# 在一台全新的 Ubuntu 24.04（AWS Lightsail、Google Cloud、Linode 等皆可，4GB 記憶體、硬碟 25GB 以上）
+# 上，從零裝好整套系統，
 # 並把舊主機匯出的資料庫還原進來。直接用正式版設定（docker-compose.prod.yml）：
 # 不對外開任何 port、主機重開機後所有服務自動啟動。
 #
-# 用法（用 ubuntu 帳號登入新主機後）：
+# 用法（登入新主機後；一般帳號或 root 都可以）：
 #   curl -fsSL https://raw.githubusercontent.com/zev-666/HankERP/main/infra/setup_new_host.sh -o setup_new_host.sh
 #   bash setup_new_host.sh ~/hankerp-final.dump
 #
@@ -36,8 +37,15 @@ die()  { echo "  ✗ $*"; echo; echo "已停止。把上面整段輸出貼給 Cl
 step() { echo; echo "=================================================================="; echo " $*"; echo "=================================================================="; }
 
 step "1. 檢查環境"
-[ "$(id -u)" != "0" ] || die "請用 ubuntu 帳號執行，不要用 root（sudo 會在需要時自動使用）"
-sudo -n true 2>/dev/null || sudo -v || die "這個帳號沒有 sudo 權限"
+ME=$(id -un)
+if [ "$(id -u)" = "0" ]; then
+  # Linode／Vultr 等預設用 root 登入；用 root 執行也可以，程式會裝在 /root/HankERP
+  command -v sudo >/dev/null || { apt-get update -qq && apt-get install -y -qq sudo >/dev/null; } || die "安裝 sudo 失敗"
+  warn "目前用 root 執行，程式會放在 $HOME/HankERP"
+else
+  sudo -n true 2>/dev/null || sudo -v || die "這個帳號（$ME）沒有 sudo 權限"
+fi
+ok "執行帳號：$ME"
 . /etc/os-release
 [ "${ID:-}" = "ubuntu" ] || die "這支腳本只支援 Ubuntu（目前是 ${PRETTY_NAME:-未知}）"
 ok "作業系統：$PRETTY_NAME"
@@ -78,7 +86,7 @@ else
   sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null \
     || die "安裝 Docker 失敗"
   sudo systemctl enable --now docker >/dev/null 2>&1
-  sudo usermod -aG docker "$USER"
+  [ "$ME" = "root" ] || sudo usermod -aG docker "$ME"
   ok "已安裝：$(sudo docker --version)（下次登入起不用 sudo 也能用 docker）"
 fi
 DC="sudo docker compose"
@@ -115,7 +123,7 @@ NEXT_PUBLIC_SITE_URL=$SITE
 TUNNEL_TOKEN=PENDING
 EOF
   umask 022
-  ok "已產生 .env（權限 600，只有 ubuntu 帳號讀得到）"
+  ok "已產生 .env（權限 600，只有 $ME 讀得到）"
 fi
 grep -q '^COMPOSE_FILE=docker-compose.prod.yml' .env || die ".env 沒有 COMPOSE_FILE=docker-compose.prod.yml"
 $DC config --services 2>/dev/null | grep -qx cloudflared || die "docker compose 沒有讀到正式版設定（COMPOSE_FILE 沒生效）"
