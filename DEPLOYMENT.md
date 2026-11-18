@@ -17,6 +17,16 @@
 
 ---
 
+## 離線版（v2.3.11）
+
+不需要雲端主機與網域：在一台 Windows 電腦裝 Docker Desktop，點兩下 `offline\Start-ERP.bat`。
+完整說明在 `offline/README.md`。與正式站的差異都寫在 `docker-compose.offline.yml` 開頭；守門測試 `backend/tests/test_compose_offline.py`。
+
+- 只有 frontend 開 port；API 走同源 `/api/*`（`NEXT_PUBLIC_API_URL=same-origin`＋建置參數 `API_PROXY_TARGET`）。
+  改這兩個值要重新建置（`erp.ps1 update`），跟正式站的 `NEXT_PUBLIC_*` 一樣是建置期寫死。
+- 資料庫 volume 屬於專案 `everevo-offline`，`docker compose down -v`（開發版）不會刪到它；反之亦然。
+- 從 Zeabur 封存檔搬資料：把 `hankerp-archive.tar.gz` 拖到 `Restore-ERP.bat`。
+
 ## 搬到新主機（v2.3.9）
 
 **為什麼**：Zeabur 2026-10-17 公告停止營運，12/1 停止續約、12/31 前所有專用主機到期關機。

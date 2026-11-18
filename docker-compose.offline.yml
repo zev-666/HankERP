@@ -1,0 +1,125 @@
+# ═══════════════════════════════════════════════════════════════════
+# 離線版（v2.3.11）：在一台 Windows 電腦上自己跑整套系統，不需要網路。
+#
+# 不要直接下這個檔案的指令——請用 offline\Start-ERP.bat（點兩下）。
+# 腳本會產生 offline\offline.env（密鑰、資料庫密碼），並用：
+#   docker compose -f docker-compose.offline.yml --env-file offline\offline.env up -d
+#
+# 與正式站 docker-compose.prod.yml 的差別，每一條都是刻意的：
+#   1. 沒有 cloudflared：不經過 Cloudflare，也就不需要網路。
+#   2. 只有 frontend 開 port（預設 127.0.0.1:3000，只有這台電腦連得到）。
+#      要讓同一個區域網路的其他電腦使用，執行 offline\LAN-On.bat（改綁 0.0.0.0）。
+#   3. 瀏覽器呼叫 API 走同一個網址的 /api/*，由前端容器轉給 backend（next.config.js rewrites）。
+#      所以 backend 不開 port，也沒有「API 網址要寫死哪個 IP」的問題。
+#   4. 登入限流放寬為 30/minute（正式站 5/minute）。Docker Desktop 會把區域網路上每台電腦的
+#      來源位址換成同一個內部位址，後端分不出誰是誰，全廠共用一個計數器；
+#      維持 5 次的話，一個人打錯密碼 5 次，所有人被鎖 1 分鐘。
+#      （2026-11-17 實測：Next.js 的 /api 代理不會帶上真實來源 IP，所以也無法靠標頭分辨。）
+#   5. 專案名稱固定為 everevo-offline：資料庫 volume 與開發版（docker-compose.yml）分開，
+#      在同一個資料夾裡跑離線版不會動到開發用的資料，反之亦然。
+#   6. 映像有固定名稱，Export-Images 可以存成檔案帶到沒有網路的電腦載入。
+#
+# backend/tests/test_compose_offline.py 會檢查上述前提，以及開發版新增的服務／變數這裡也有。
+# ═══════════════════════════════════════════════════════════════════
+name: everevo-offline
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: acrylic_erp
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?請用 offline\\Start-ERP.bat 啟動（它會產生 offline.env）}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_user -d acrylic_erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  db-backup:
+    image: postgres:15-alpine
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: erp_user
+      PGPASSWORD: "${DB_PASSWORD:?}"
+      PGDATABASE: acrylic_erp
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+    volumes:
+      - ./infra/backup:/scripts:ro
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "/scripts/backup.sh"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    image: everevo-erp-backend:offline
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://erp_user:${DB_PASSWORD:?}@db:5432/acrylic_erp"
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: "${SECRET_KEY:?請用 offline\\Start-ERP.bat 啟動}"
+      SEED_ADMIN_PASSWORD: "${SEED_ADMIN_PASSWORD:?請用 offline\\Start-ERP.bat 啟動}"
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      TENANT_ID: default
+      ENVIRONMENT: production
+      # 瀏覽器只會打同源的 /api，不會跨網域；這個值只是讓設定完整
+      CORS_ORIGINS: http://localhost:3000
+      TRUST_CF_CONNECTING_IP: "false"
+      LOGIN_RATE_LIMIT: 30/minute
+    volumes:
+      - media_files:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+
+  celery:
+    build: ./backend
+    image: everevo-erp-backend:offline
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://erp_user:${DB_PASSWORD:?}@db:5432/acrylic_erp"
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: "${SECRET_KEY:?}"
+    depends_on:
+      - redis
+      - db
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: same-origin
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+        API_PROXY_TARGET: http://backend:8000
+    image: everevo-erp-frontend:offline
+    environment:
+      NEXT_PUBLIC_API_URL: same-origin
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      INTERNAL_API_URL: http://backend:8000
+      # rewrites 以建置期為準；執行期也給同一個值，避免 next start 重新讀設定時對不上
+      API_PROXY_TARGET: http://backend:8000
+    ports:
+      - "${ERP_BIND:-127.0.0.1}:${ERP_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  media_files:

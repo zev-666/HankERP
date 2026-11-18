@@ -101,7 +101,8 @@ class ResetPasswordRequest(BaseModel):
         return _validate_password_strength(v)
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("5/minute")
+# 次數讀設定（預設 5/minute；離線版放寬，理由見 app/config.py 的 LOGIN_RATE_LIMIT）
+@limiter.limit(lambda: settings.LOGIN_RATE_LIMIT)
 async def login(request: Request, request_body: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == request_body.email, User.is_active == True))
     user = result.scalar_one_or_none()

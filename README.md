@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| **目前版本** | v2.3.10（2026-10-21，新主機安裝腳本支援各家雲端與 root 帳號） |
+| **目前版本** | v2.3.11（2026-11-18，離線版：Windows 一鍵啟動，不需網路） |
 | **後端** | FastAPI 0.135 + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL 15/16 + Celery + Redis |
 | **前端** | Next.js 16.3.5 + Tailwind CSS + TanStack Query + Zustand + Recharts |
 | **實測規模** | 13 個業務模組 · 73 個業務 API 端點（＋`/health` 共 74）· 30 張業務資料表 · 26 條前端路由（24 靜態 ＋ 2 動態）|
@@ -195,6 +195,38 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > v1.0–v1.9 的交付物為 `acrylic-erp-verified.zip`；**v2.0 起改以 git 儲存庫
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
+
+### v2.3.11（2026-11-18）— 離線版：在一台 Windows 電腦上自己跑
+
+**為什麼**：Zeabur 主機 11/14 到期已關閉；AWS、Google Cloud 新帳號都卡在審核。使用者要一套「下載到電腦就能用、不需網路」的版本，
+帶到工廠現場示範與試用。選擇「Docker Desktop＋一鍵啟動」而不是 .exe 安裝檔：程式完全不用改寫，功能與正式站相同。
+
+- `docker-compose.offline.yml`（新）：沒有 cloudflared；只有 frontend 開 port，預設綁 `127.0.0.1`；不用開發模式；
+  密碼與密鑰沒有預設值（必填）；專案名稱固定 `everevo-offline`，資料庫與開發版分開；映像有固定名稱可匯出。
+- 前端「同源 API」模式：`NEXT_PUBLIC_API_URL=same-origin` 時瀏覽器打 `/api/*`，由 `next.config.js` 的 rewrites
+  （建置參數 `API_PROXY_TARGET`）轉給後端。同一份建置在 `localhost` 與區域網路 IP 都能用，backend 不必開 port。
+  新增 `src/lib/apiBase.ts`，`api.ts`／`publicApi.ts` 改用它；一般模式行為不變。
+- `frontend/.dockerignore`（新）：不把主機的 `node_modules`、`.next` 複製進映像（Windows 上的 node_modules 會蓋掉容器裡裝好的）。
+- 登入限流次數改讀設定 `LOGIN_RATE_LIMIT`（預設仍 `5/minute`），離線版設 `30/minute`。
+  原因：Docker Desktop 把區域網路所有電腦的來源位址換成同一個，全廠共用一個計數器；
+  實測 Next.js 代理也不帶真實來源 IP，所以無法靠標頭分辨（最初嘗試信任 `X-Forwarded-For`，實測無效已撤回）。
+- `offline/`（新）：`erp.ps1`（PowerShell 5.1 相容，UTF-8 BOM＋CRLF）與 7 個 `.bat`：
+  啟動（第一次產生隨機密鑰與資料庫密碼、詢問管理員密碼、建置、migration、seed、開瀏覽器）、停止、狀態、
+  備份、還原（接受 `.dump` 或 10/27 的 `hankerp-archive.tar.gz`，還原前自動備份現況並要求輸入 YES）、
+  開放／關閉區域網路、匯出／匯入映像（給沒有網路的電腦）、更新。3000 被佔用時自動改用 3100 等。`offline/README.md` 是使用說明。
+- `npm audit fix`：next 16.4.1 → 16.4.6（GHSA-mfr8-8qww-v76h）。zod 的 high 只在 eslint-config-next 的開發相依裡，修正需破壞性升級，未處理。
+
+**驗證**（雲端沙盒）：
+- pytest **300 passed**（同一沙盒 v2.3.10 為 290；新增 `test_compose_offline.py` 7 項、`test_rate_limit_client_ip.py` 3 項）；限流新測試在舊程式上失敗。
+- 前端以離線版參數 `next build` 成功（26 個路由，與 v2.3.10 相同）；`routes-manifest.json` 含 `/api/:path*` 轉址；
+  建置出的前端程式不含 `localhost:8000`。eslint、tsc 通過。
+- 真實 PostgreSQL＋uvicorn＋`next start`，全部經 `/api` 代理：未登入 401、登入、`/me`、新增客戶並在資料庫查到、`/docs` 與 `/openapi.json` 404。
+- 限流經代理實測：`5/minute` 第 6 次 429；`30/minute` 連續 8 次都是 401（不鎖人）。
+- 還原流程（備份 → 清空 schema → `pg_restore --exit-on-error` → migration → seed）在沙盒實跑：31 張表、資料一致。
+- `docker compose config` 解析成功，密碼含 `$` 不會被展開。
+
+⚠️ **未驗證**：`erp.ps1` 與 `.bat` 沒有在 Windows 上執行過（沙盒不能裝 PowerShell，只做了括號平衡與編碼檢查）；
+離線版的 Docker 映像沒有實際建置（沙盒連不到 Docker Hub）。第一次在使用者電腦上執行就是實測，輸出要貼回檢查。
 
 ### v2.3.10（2026-10-21）— 安裝腳本不綁定 AWS
 

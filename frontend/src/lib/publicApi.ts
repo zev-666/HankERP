@@ -6,7 +6,9 @@
  * 整個前端建置就會失敗——那會讓「後端沒開就不能建置前端」，在 CI 與
  * 本機開發都非常難用。改為降級為空清單，頁面顯示「案例即將上線」。
  */
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_BASE_URL } from "./apiBase";
+
+const BASE_URL = API_BASE_URL;
 
 /**
  * 伺服器端（Server Component）抓資料用的網址（v2.3.5）。
@@ -14,7 +16,9 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
  * 不必繞到外網、經過 Cloudflare 再回到同一台主機。沒設就跟瀏覽器用同一個網址。
  * 只在 getJson（伺服器端）使用；瀏覽器端（詢價表單）仍用 PUBLIC_API_BASE。
  */
-const SERVER_BASE_URL = process.env.INTERNAL_API_URL || BASE_URL;
+// 離線版 BASE_URL 是空字串（同源）；伺服器端沒有「同源」可言，所以一定要有 INTERNAL_API_URL，
+// 沒設時退回 localhost，抓不到就走下方 getJson 的降級（空清單）。
+const SERVER_BASE_URL = process.env.INTERNAL_API_URL || BASE_URL || "http://localhost:8000";
 
 export type PortfolioCase = {
   title: string;

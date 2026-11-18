@@ -1,4 +1,6 @@
-﻿const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+﻿import { API_BASE_URL } from "./apiBase";
+
+const BASE_URL = API_BASE_URL;
 
 class ApiClient {
   getToken(): string | null {

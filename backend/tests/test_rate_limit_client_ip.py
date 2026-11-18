@@ -85,3 +85,33 @@ def test_blank_header_falls_back_to_socket_address(trust_cf):
 def test_setting_defaults_to_not_trusted():
     from app.config import Settings
     assert Settings.model_fields["TRUST_CF_CONNECTING_IP"].default is False
+
+
+# ── 登入限流次數可設定（v2.3.11，離線版用）──────────────────────────────────
+def test_login_limit_default_is_five_per_minute():
+    from app.config import Settings
+    assert Settings.model_fields["LOGIN_RATE_LIMIT"].default == "5/minute"
+
+
+def test_login_route_reads_limit_from_settings():
+    """登入端點的次數必須讀設定，不能寫死——否則離線版的放寬不會生效。"""
+    src = (Path(__file__).resolve().parent.parent / "app" / "auth" / "router.py").read_text(encoding="utf-8")
+    login_block = src.split('@router.post("/login"', 1)[1].split("async def login", 1)[0]
+    assert "settings.LOGIN_RATE_LIMIT" in login_block
+    assert '"5/minute"' not in login_block
+
+
+def test_callable_limit_follows_setting(monkeypatch):
+    """slowapi 每次請求都重新讀設定值：改成 3/minute 後，第 4 次才被擋。"""
+    monkeypatch.setattr(settings, "LOGIN_RATE_LIMIT", "3/minute")
+    app = FastAPI()
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    async def rl_callable(request: Request):
+        return {"ok": True}
+
+    app.get("/t")(limiter.limit(lambda: settings.LOGIN_RATE_LIMIT)(rl_callable))
+    limiter.reset()
+    c = TestClient(app)
+    assert [c.get("/t").status_code for _ in range(4)] == [200, 200, 200, 429]

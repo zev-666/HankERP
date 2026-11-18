@@ -53,3 +53,7 @@ backups/
 
 # 本機匯入用的暫存目錄（patch 檔等），不進版控
 _匯入Project/
+
+# 離線版：密鑰與資料庫密碼、匯出的映像檔
+offline/offline.env
+offline/*.tar

@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # 限流是否信任 Cloudflare 的 CF-Connecting-IP 標頭（v2.3.5）。只有「後端不對外開 port、
     # 流量必經 Cloudflare Tunnel」時才可設 true，否則標頭可被偽造來繞過限流。見 app/rate_limit.py
     TRUST_CF_CONNECTING_IP: bool = False
+    # 登入限流（每個來源 IP）。離線版（v2.3.11）放寬：Docker Desktop 會把區域網路上所有電腦的
+    # 來源位址都換成同一個內部位址，後端分不出誰是誰，全廠共用一個計數器——
+    # 維持 5/minute 的話，一個人打錯密碼 5 次，所有人被鎖 1 分鐘。見 docker-compose.offline.yml。
+    LOGIN_RATE_LIMIT: str = "5/minute"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
