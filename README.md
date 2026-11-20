@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| **目前版本** | v2.3.12（2026-11-20，修正 CI 前端稽核失敗：移除沒用到的 zod） |
+| **目前版本** | v2.3.13（2026-11-20，修正裁切排版「產生裁切計畫」在新安裝的資料庫上回 500） |
 | **後端** | FastAPI 0.135 + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL 15/16 + Celery + Redis |
 | **前端** | Next.js 16.3.5 + Tailwind CSS + TanStack Query + Zustand + Recharts |
 | **實測規模** | 13 個業務模組 · 73 個業務 API 端點（＋`/health` 共 74）· 30 張業務資料表 · 26 條前端路由（24 靜態 ＋ 2 動態）|
@@ -195,6 +195,28 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > v1.0–v1.9 的交付物為 `acrylic-erp-verified.zip`；**v2.0 起改以 git 儲存庫
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
+
+### v2.3.13（2026-11-20）— 裁切排版「產生裁切計畫」在新安裝的資料庫上回 500
+
+**為什麼**：製作使用教學時，在剛 seed 完的乾淨資料庫上按「產生裁切計畫」沒有任何反應，uvicorn log 出現
+`nesting_jobs_material_id_fkey` 外鍵錯誤。原因：`/erp/nesting` 頁面沒有選物料的欄位，`material_id` 永遠送假值
+`00000000-0000-0000-0000-000000000001`，而 `nesting_jobs.material_id` 是 NOT NULL 外鍵；seed 不會建立這筆物料。
+**影響**：v2.3.11 離線版新安裝後，主打功能的主要按鈕一定失敗（「比較 9 種板型」不受影響，它不寫資料庫）。
+頁面也沒有顯示錯誤，所以使用者看起來只是「按了沒反應」。
+
+- `nesting_jobs.material_id` 改為可空（migration `d4f2a9c1e7b3`，downgrade 前若有未指定物料的紀錄會停下說明，不自動刪資料）；
+  `NestingRequest.material_id` 改選填。排版計算本身不需要物料，物料只用來把結果和庫存關聯。
+- 前端：新增「板材物料（選填）」下拉選單（列出壓克力物料，預設「不指定（只算排版）」），不再送假 UUID；
+  計算或比較失敗時在按鈕下方顯示錯誤訊息。
+- 新增 `tests/test_nesting_material_optional.py` 4 項，在舊程式上 4 項全部失敗（已實際執行確認）。
+
+**驗證**（雲端沙盒，真實 PostgreSQL 16 ＋ 真實 HTTP ＋ 真實瀏覽器）：
+- 以 headless Chrome 登入、進入裁切排版頁按「產生裁切計畫」：API 回 200，畫面出現排版結果（預設零件 1 張板、85.1%）；
+  查 `nesting_jobs` 新增一筆 `status=completed`、`material_id IS NULL`。修正前同一步驟回 500。
+- migration upgrade → downgrade → upgrade 往返，`is_nullable` 依序為 YES → NO → YES；`verify_migration_v21.py` 通過。
+- pytest **304 passed**（300 ＋ 新增 4）；在全新資料庫上 `verify_e2e.py` ×3、`verify_rbac.py`、`verify_users.py` 全部通過。
+- 前端 `eslint . --max-warnings=0`、`tsc --noEmit`、離線版參數 `next build`、`npm audit --omit=dev --audit-level=high`（0 漏洞）通過。
+- 未驗證：Windows 離線版上的實際操作（需使用者 `git pull` 後在 `offline` 資料夾執行 `erp.ps1 update` 再試）。
 
 ### v2.3.12（2026-11-20）— CI 前端稽核失敗：移除沒用到的 zod
 

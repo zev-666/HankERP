@@ -49,6 +49,7 @@
 > 舊程式預設規格報 NT$923、正確為 NT$2,286。pytest **276 passed**（新增 4 項，3 項在舊程式上失敗）。
 >
 > **v2.3.9**（2026-10-20）：Zeabur 停止營運，新增 `infra/setup_new_host.sh` 新主機一鍵安裝（目標 AWS Lightsail）。程式邏輯未改，清單項目數不變。
+> **v2.3.13**（2026-11-20）：裁切排版「產生裁切計畫」在新安裝的資料庫上回 500（頁面送假物料 ID）。物料改選填＋migration `d4f2a9c1e7b3`；沙盒以真實瀏覽器按鈕＋查庫驗證。pytest 304。
 > **v2.3.12**（2026-11-20）：移除沒用到的 zod，修正 CI 前端稽核失敗。功能未改。
 > **v2.3.11**（2026-11-18）：新增離線版（`docker-compose.offline.yml`＋`offline/` 一鍵啟動）。⚠️ 程式碼存在，沙盒已驗證同源代理登入與寫入、限流、還原流程；Windows 腳本與映像建置未在真機執行。業務功能未改，清單項目數不變。
 > **v2.3.10**（2026-10-21）：安裝腳本允許 root、不綁定 AWS（AWS／Google Cloud 新帳號都被限制，可能改用別家）。程式邏輯未改，清單項目數不變。
@@ -188,6 +189,9 @@
   驗證：引擎 21 項 pytest 全過，且新增的 5 項在舊引擎上確實失敗；migration 的重算函式與新引擎 4 組輸入結果一致。
   **v2.2 補上執行期證據**：CI #6（commit `3b8665d`）綠燈，`verify_migration_v21.py` 在真實
   PostgreSQL 16 上完成 downgrade → 寫入舊格式資料 → upgrade → 查庫比對 → downgrade 還原 → 再 upgrade
+- [x] ✅ 不指定物料也能產生裁切計畫 — **v2.3.13**：先前頁面送假物料 ID，新安裝的資料庫一按就 500。
+  沙盒以真實瀏覽器按鈕操作、查 `nesting_jobs` 確認寫入（`material_id` 為 NULL）。
+- [ ] ❌ 物料主檔頁面 — 後端有 `POST/GET /api/v1/materials`，前端沒有頁面；板材入庫、BOM、工單仍要手動貼 UUID（v2.3.13 製作使用教學時確認）
 - [ ] ❌ 剩料自動入庫 — **v2.3 實測更正**：`nesting/router.py` 從頭到尾沒有任何一行寫入 `remnant_inventory`，
   唯一的寫入點是 `POST /api/v1/inventory/remnants` 人工建立。舊標 ⚠️ 是錯的，實際是未實作。
   v2.3 的排版結果已含剩料尺寸與 A/B/C 等級（存在 `result_json`），自動入庫是下一步

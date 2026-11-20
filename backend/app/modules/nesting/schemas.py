@@ -13,7 +13,8 @@ class PartInput(BaseModel):
     bom_item_id: Optional[UUID] = None
 
 class NestingRequest(BaseModel):
-    material_id: UUID
+    # v2.3.13：選填。只想算排版、還沒建物料主檔時不必指定
+    material_id: Optional[UUID] = None
     wo_id: Optional[UUID] = None
     # v2.3：預設板改為 S 1915×1315——本廠的標準板。
     # 先前寫 2000×1000，那是舊文件的錯誤值（2000×1000 只是 9 種板型之一）。

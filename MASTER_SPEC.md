@@ -431,7 +431,7 @@ CREATE TABLE nesting_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID REFERENCES tenants(id),
   wo_id UUID REFERENCES work_orders(id),
-  material_id UUID REFERENCES materials(id),
+  material_id UUID REFERENCES materials(id),  -- v2.3.13 起可空：不指定物料也能排版
   sheet_length_mm NUMERIC(8,2),
   sheet_width_mm NUMERIC(8,2),
   algorithm_version VARCHAR(20),   -- 'bfd_v1','ga_v2','drl_v3'

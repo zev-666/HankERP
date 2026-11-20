@@ -11,7 +11,8 @@ class NestingJob(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"))
     wo_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True)
-    material_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"))
+    # v2.3.13：可空。裁切排版頁沒有選物料欄位時不指定，先前送假 UUID 造成外鍵錯誤 500
+    material_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("materials.id"), nullable=True)
     # v2.3：預設板改為 S 1915×1315（本廠標準板）。2000×1000 是舊文件的錯誤值。
     sheet_length_mm: Mapped[Decimal] = mapped_column(Numeric(8,2), default=Decimal("1915"))
     sheet_width_mm: Mapped[Decimal] = mapped_column(Numeric(8,2), default=Decimal("1315"))

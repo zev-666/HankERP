@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api, errorText } from "@/lib/api";
 import { Plus, Trash2, Play, RotateCw, Scissors, Layers } from "lucide-react";
 
 interface Part { label: string; length_mm: number; width_mm: number; quantity: number; can_rotate: boolean }
@@ -41,9 +41,11 @@ export default function NestingPage() {
   const [openSheet, setOpenSheet] = useState<number | null>(0);
 
   const { data: jobs } = useQuery({ queryKey: ["nesting-jobs"], queryFn: () => api.getNestingJobs() });
+  // v2.3.13：物料改為選填。舊版送假 UUID，新安裝的資料庫沒有那筆物料 → 外鍵錯誤 500
+  const { data: materials } = useQuery({ queryKey: ["materials", "acrylic"], queryFn: () => api.getMaterials("acrylic") });
 
   const body = () => ({
-    material_id: materialId || "00000000-0000-0000-0000-000000000001",
+    ...(materialId ? { material_id: materialId } : {}),
     sheet_length_mm: sheetL, sheet_width_mm: sheetW, kerf_mm: kerf,
     trim_mm: trim, min_remnant_mm: minRem, rem_pref: remPref, parts,
   });
@@ -149,6 +151,16 @@ export default function NestingPage() {
                 </select>
               </div>
               <div>
+                <label className="block text-xs text-slate-500 mb-1">板材物料（選填）</label>
+                <select value={materialId} onChange={e => setMaterialId(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">不指定（只算排版）</option>
+                  {(materials?.data || []).map((m: any) => (
+                    <option key={m.id} value={m.id}>{m.code ? `${m.code}　` : ""}{m.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-xs text-slate-500 mb-1">可回收剩料最小邊長 (mm)</label>
                 <input type="number" step="5" value={minRem} onChange={e => setMinRem(+e.target.value)}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -205,6 +217,11 @@ export default function NestingPage() {
               {compareMut.isPending ? <RotateCw size={14} className="animate-spin" /> : <Layers size={14} />}
               比較 9 種板型，找最省
             </button>
+            {(calcMut.isError || compareMut.isError) && (
+              <p className="mt-2 text-xs text-red-600">
+                計算失敗：{errorText(calcMut.error || compareMut.error)}
+              </p>
+            )}
           </div>
         </div>
 
