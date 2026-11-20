@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| **目前版本** | v2.3.11（2026-11-18，離線版：Windows 一鍵啟動，不需網路） |
+| **目前版本** | v2.3.12（2026-11-20，修正 CI 前端稽核失敗：移除沒用到的 zod） |
 | **後端** | FastAPI 0.135 + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL 15/16 + Celery + Redis |
 | **前端** | Next.js 16.3.5 + Tailwind CSS + TanStack Query + Zustand + Recharts |
 | **實測規模** | 13 個業務模組 · 73 個業務 API 端點（＋`/health` 共 74）· 30 張業務資料表 · 26 條前端路由（24 靜態 ＋ 2 動態）|
@@ -196,6 +196,17 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
 > `zev-666/HankERP` 為單一事實來源**，不再用 zip 傳遞版本——分散在多個 zip、
 > 各檔案版本又不同步，正是 v2.0 要解決的問題本身。
 
+### v2.3.12（2026-11-20）— CI 前端稽核失敗：移除沒用到的 zod
+
+**為什麼**：v2.3.11 推上後 CI 前端 job 失敗，失敗步驟是 `npm audit --omit=dev --audit-level=high`。
+zod 3.25.76 有 high 漏洞（GHSA-mrhx-c7xc-m3w5，修正版 4.6.6），而 zod 列在 `package.json` 的 dependencies。
+**更正 v2.3.11 的說法**：當時寫「zod 的 high 只在 eslint-config-next 的開發相依裡」是錯的，它也是正式相依；
+本機只跑了不含 `--omit=dev` 的 `npm audit`，沒有照 CI 的指令跑，所以沒抓到。
+
+- `src/` 與設定檔完全沒有引用 zod，直接從 dependencies 移除。它仍是 eslint-plugin-react-hooks 的開發相依（只在 lint 時執行）。
+- 驗證：照 CI 的五個步驟在 Node 22 重跑：`npm ci`、`npx eslint . --max-warnings=0`、`npm run build`（26 個路由）、
+  `npm audit --omit=dev --audit-level=high`（0 個漏洞）全部通過；`tsc` 通過。後端未改。
+
 ### v2.3.11（2026-11-18）— 離線版：在一台 Windows 電腦上自己跑
 
 **為什麼**：Zeabur 主機 11/14 到期已關閉；AWS、Google Cloud 新帳號都卡在審核。使用者要一套「下載到電腦就能用、不需網路」的版本，
@@ -214,7 +225,7 @@ v2.0 之前，「發料」與「完工入庫」兩個箭頭是斷的：生產模
   啟動（第一次產生隨機密鑰與資料庫密碼、詢問管理員密碼、建置、migration、seed、開瀏覽器）、停止、狀態、
   備份、還原（接受 `.dump` 或 10/27 的 `hankerp-archive.tar.gz`，還原前自動備份現況並要求輸入 YES）、
   開放／關閉區域網路、匯出／匯入映像（給沒有網路的電腦）、更新。3000 被佔用時自動改用 3100 等。`offline/README.md` 是使用說明。
-- `npm audit fix`：next 16.4.1 → 16.4.6（GHSA-mfr8-8qww-v76h）。zod 的 high 只在 eslint-config-next 的開發相依裡，修正需破壞性升級，未處理。
+- `npm audit fix`：next 16.4.1 → 16.4.6（GHSA-mfr8-8qww-v76h）。（zod 的說明有誤，見 v2.3.12 更正。）
 
 **驗證**（雲端沙盒）：
 - pytest **300 passed**（同一沙盒 v2.3.10 為 290；新增 `test_compose_offline.py` 7 項、`test_rate_limit_client_ip.py` 3 項）；限流新測試在舊程式上失敗。
